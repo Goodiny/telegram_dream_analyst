@@ -1,20 +1,28 @@
-import logging
+import json
+import logging.config
 
 import requests
 
-OPENCAGE_API_KEY = "47f19b58763542309908925d4357927b"
+from config import OPENCAGE_API_KEY
+
+# OPENCAGE_API_KEY = "47f19b58763542309908925d4357927b"
 
 # Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,  # Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("bot.log"),  # Запись логов в файл bot.log
-        logging.StreamHandler()  # Вывод логов в консоль
-    ]
-)
+# logging.basicConfig(
+#     level=logging.INFO,  # Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#     handlers=[
+#         logging.FileHandler("bot.log"),  # Запись логов в файл bot.log
+#         logging.StreamHandler()  # Вывод логов в консоль
+#     ]
+# )
+
+with open('logging.json', 'r') as f:
+    config = json.load(f)
+    logging.config.dictConfig(config)
 
 logger = logging.getLogger(__name__)
+
 
 def get_city_from_coordinates(latitude, longitude):
     url = "https://api.opencagedata.com/geocode/v1/json"

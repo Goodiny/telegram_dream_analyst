@@ -1,20 +1,26 @@
-import logging
+import json
+import logging.config
 
 import requests
 
+from config import WEATHER_API_KEY, WEATHER_BASE_URL
 
-API_KEY = "48390dd0b5cc12b9923ac4bc75063c85"
-BASE_URL = "http://api.openweathermap.org/data/2.5/weather"
+# API_KEY = "48390dd0b5cc12b9923ac4bc75063c85"
+# BASE_URL = "http://api.openweathermap.org/data/2.5/weather"
 
 # Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,  # Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("bot.log"),  # Запись логов в файл bot.log
-        logging.StreamHandler()  # Вывод логов в консоль
-    ]
-)
+# logging.basicConfig(
+#     level=logging.INFO,  # Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#     handlers=[
+#         logging.FileHandler("bot.log"),  # Запись логов в файл bot.log
+#         logging.StreamHandler()  # Вывод логов в консоль
+#     ]
+# )
+
+with open('logging.json', 'r') as f:
+    config = json.load(f)
+    logging.config.dictConfig(config)
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +29,11 @@ def get_weather(city_name: str):
     try:
         params = {
             "q": city_name,
-            "appid": API_KEY,
+            "appid": WEATHER_API_KEY,
             "units": "metric",
             "lang": "ru"
         }
-        response = requests.get(BASE_URL, params)
+        response = requests.get(WEATHER_BASE_URL, params)
         data = response.json()
 
         if response.status_code == 200:

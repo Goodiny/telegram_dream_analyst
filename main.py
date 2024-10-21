@@ -19,6 +19,7 @@ from apscheduler.triggers.cron import CronTrigger
 import sqlite3
 from datetime import datetime, time, timedelta
 
+from config import TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_BOT_TOKEN
 from location_detect import get_city_from_coordinates
 from modify_tables import execute_query, database_initialize, create_trigers_db, save_user_city
 
@@ -44,15 +45,15 @@ with open('logging.json', 'r') as f:
 logger = logging.getLogger('bot')
 
 # Инициализация переменных окружения
-API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+# API_ID = int(os.environ.get("API_ID"))
+# API_HASH = os.environ.get("API_HASH")
+# BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 # Создание экземпляра клиента бота
 app = Client("sleep_tracker_bot",
-             api_id=API_ID,
-             api_hash=API_HASH,
-             bot_token=BOT_TOKEN)
+             api_id=TELEGRAM_API_ID,
+             api_hash=TELEGRAM_API_HASH,
+             bot_token=TELEGRAM_BOT_TOKEN)
 
 # Инициализация базы данных
 try:
