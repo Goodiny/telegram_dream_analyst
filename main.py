@@ -233,6 +233,15 @@ async def start(client: Client, message: Message):
         add_user_to_db(user)
     finally:
         # Отправка приветственного сообщения с пользовательской клавиатурой
+
+        # result = execute_query("SELECT has_provided_location FROM users WHERE user_id = ? AND "
+        #                        "has_provided_location = 0",
+        #                        (user.id,)).fetchone()
+        #
+        # if result is None or not result[0]:
+        #     await request_location(client, message)
+        # else:
+        #     await message.reply_text("Добро пожаловать! Вы уже предоставили свою локацию.")
         await message.reply_text(
             "👋 Привет! Я бот для отслеживания сна.\n\n"
             "Выберите действие из меню ниже:",

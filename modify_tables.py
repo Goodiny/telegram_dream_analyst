@@ -18,7 +18,8 @@ def execute_query(query, params=None, row_factory=True):
 
 def save_user_city(user_id, city_name):
     # Здесь реализуется логика сохранения данных в базе данных
-    execute_query("UPDATE users SET city_name = ? WHERE id = ?", (city_name, user_id))
+    execute_query("UPDATE users SET city_name = ?, has_provided_location = 1 WHERE id = ?",
+                  (city_name, user_id))
 
 
 
