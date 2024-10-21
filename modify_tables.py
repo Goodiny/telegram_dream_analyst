@@ -33,7 +33,8 @@ def database_initialize():
             last_name TEXT,
             phone_number TEXT,  -- если вы храните номер телефона
             city_name TEXT,
-            sleep_goal REAL     -- если вы храните цель сна
+            sleep_goal REAL,     -- если вы храните цель сна
+            has_provided_location INT DEFAULT 0
         )
     ''')
 
