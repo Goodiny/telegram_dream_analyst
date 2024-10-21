@@ -84,7 +84,7 @@ class UserStates(Enum):
     STATE_WAITING_LOCATION = auto()
 
 
-def user_state_navigate(state: UserStates, client: Client, message: Message, user: User = None):
+async def user_state_navigate(state: UserStates, client: Client, message: Message, user: User = None):
     if user is None:
         return  # Игнорируем сообщения без информации о пользователе
     try:
@@ -94,23 +94,21 @@ def user_state_navigate(state: UserStates, client: Client, message: Message, use
     user_id = user.id
 
     if state == UserStates.STATE_WAITING_REMINDER_TIME:
-        save_reminder_time(client, message, user)
+        await save_reminder_time(client, message, user)
     elif state == UserStates.STATE_WAITING_SLEEP_QUALITY:
-        save_sleep_quality(client, message, user)
+        await save_sleep_quality(client, message, user)
     elif state == UserStates.STATE_WAITING_SLEEP_GOAL:
         logger.info(__name__ + str(state))
-        save_sleep_goal(client, message, user)
+        await save_sleep_goal(client, message, user)
     elif state == UserStates.STATE_WAITING_SAVE_MOOD:
-        save_mood(client, message, user)
+        await save_mood(client, message, user)
     elif state == UserStates.STATE_WAITING_CONFIRM_DELETE:
-        confirm_delete(client, message, user)
-    elif state == UserStates.STATE_WAITING_LOCATION:
-        request_location
+        await confirm_delete(client, message, user)
     else:
-        message.reply_text("Произошла ошибка. Пожалуйста, начните заново.",
+        await message.reply_text("Произошла ошибка. Пожалуйста, начните заново.",
                            reply_markup=get_back_keyboard())
         user_states[user_id] = UserStates.STATE_NONE
-    message.delete()
+    await message.delete()
 
 
 # Функция для создания основной клавиатуры
@@ -340,14 +338,15 @@ async def save_sleep_quality(client: Client, message: Message, user: User = None
         user_id = user.id
         quality = int(message.text.strip())
         query = '''
-                    UPDATE sleep_records
-                    SET sleep_quality = :quality
-                    WHERE sleep_time IN (
-                        SELECT sleep_time FROM sleep_records 
-                        WHERE user_id = :user_id AND wake_time IS NOT NULL
-                        ORDER BY sleep_time DESC 
-                        LIMIT 1
-                    );'''
+            UPDATE sleep_records
+            SET sleep_quality = :quality
+            WHERE sleep_time IN (
+                SELECT sleep_time FROM sleep_records 
+                WHERE user_id = :user_id AND wake_time IS NOT NULL
+                ORDER BY sleep_time DESC 
+                LIMIT 1
+            );
+        '''
         params = {'quality': quality, 'user_id': user_id}
         try:
             if 1 <= quality <= 5:
@@ -408,10 +407,10 @@ async def save_sleep_goal(client: Client, message: Message, user: User = None):
         user_id = user.id
         goal = float(message.text.strip())
         query = '''
-                    UPDATE users
-                    SET sleep_goal = :goal
-                    WHERE id = :user_id
-                '''
+            UPDATE users
+            SET sleep_goal = :goal
+            WHERE id = :user_id
+        '''
         params = {'goal': goal, 'user_id': user_id}
         try:
             if 0 < goal <= 24:
@@ -537,14 +536,15 @@ async def save_mood(client: Client, message: Message, user: User = None):
         user_id = user.id
         mood = int(message.text.strip())
         query = '''
-                    UPDATE sleep_records
-                    SET mood = :mood
-                    WHERE sleep_time IN (
-                        SELECT sleep_time FROM sleep_records 
-                        WHERE user_id = :user_id AND wake_time IS NOT NULL
-                        ORDER BY sleep_time DESC 
-                        LIMIT 1
-                    );'''
+            UPDATE sleep_records
+            SET mood = :mood
+            WHERE sleep_time IN (
+                SELECT sleep_time FROM sleep_records 
+                WHERE user_id = :user_id AND wake_time IS NOT NULL
+                ORDER BY sleep_time DESC 
+                LIMIT 1
+            );
+        '''
         params = {'mood': mood, 'user_id': user_id}
         try:
             if 1 <= mood <= 5:
@@ -642,17 +642,17 @@ async def sleep_time(client: Client, message: Message, user: User = None):
     user_id = user.id
     sleep_time = datetime.now()
     query = '''
-            INSERT INTO sleep_records (user_id, sleep_time)
-            VALUES (:user_id, :sleep_time)
-        '''
+        INSERT INTO sleep_records (user_id, sleep_time)
+        VALUES (:user_id, :sleep_time)
+    '''
     params = {'user_id': user_id, 'sleep_time': sleep_time.isoformat()}
     try:
 
         select_query = execute_query('''
-                    SELECT user_id FROM sleep_records
-                    WHERE user_id = :user_id
-                    AND wake_time IS NULL
-                ''', {'user_id': user_id})
+            SELECT user_id FROM sleep_records
+            WHERE user_id = :user_id
+            AND wake_time IS NULL
+        ''', {'user_id': user_id})
 
         if len(select_query.fetchall()) > 0:
             await message.reply_text(
@@ -689,10 +689,10 @@ async def wake_time(client: Client, message: Message, user: User = None):
     user_id = user.id
     wake_time = datetime.now()
     query = '''
-            UPDATE sleep_records
-            SET wake_time = :wake_time
-            WHERE user_id = :user_id AND wake_time IS NULL
-        '''
+        UPDATE sleep_records
+        SET wake_time = :wake_time
+        WHERE user_id = :user_id AND wake_time IS NULL
+    '''
     params = {'wake_time': wake_time.isoformat(), 'user_id': user_id}
     try:
 
@@ -809,10 +809,10 @@ async def save_contact(client: Client, message: Message, user: User = None):
     contact_user_id = contact.user_id  # ID пользователя, который отправил контакт
 
     query = '''
-                UPDATE users
-                SET phone_number = :phone_number
-                WHERE id = :id
-            '''
+        UPDATE users
+        SET phone_number = :phone_number
+        WHERE id = :id
+    '''
     params = {'phone_number': phone_number, 'id': user_id}
 
     if contact_user_id == user_id:
@@ -842,9 +842,10 @@ async def save_contact(client: Client, message: Message, user: User = None):
 @app.on_message(filters.command("send_location"))
 async def request_location(client: Client, message: Message):
     location_button = KeyboardButton("Отправить местоположение", request_location=True)
-    reply_markup = ReplyKeyboardMarkup([[KeyboardButton('← Вернуться'), location_button]], resize_keyboard=True, one_time_keyboard=True)
+    reply_markup = ReplyKeyboardMarkup([[KeyboardButton('← Вернуться'), location_button]],
+                                       resize_keyboard=True, one_time_keyboard=True)
     await message.reply_text("Пожалуйста, поделитесь своим местоположением, чтобы я мог определить ваш город.",
-                       reply_markup=reply_markup)
+                             reply_markup=reply_markup)
 
 
 @app.on_message(filters.location)
@@ -906,7 +907,7 @@ async def weather_advice(client: Client, message: Message, user: User = None):
     except Exception as e:
         logger.error(f"Ошибка при запросе имени города пользователя {user_id}: {e}")
         await message.reply_text("Произошла ошибка при запросе данных о городе, попробуйте ещё раз",
-                           reply_markup=request_location(client, message))
+                                 reply_markup=request_location(client, message))
 
 
 # Команда /sleep_chart
@@ -920,10 +921,10 @@ async def sleep_chart(client: Client, message: Message, user: User = None):
         logger.error(f"Пользователь {user} не является валидным: {e}")
     user_id = user.id
     query = '''
-            SELECT sleep_time, wake_time FROM sleep_records
-            WHERE user_id = :user_id AND wake_time IS NOT NULL
-            ORDER BY sleep_time DESC LIMIT 7
-        '''
+        SELECT sleep_time, wake_time FROM sleep_records
+        WHERE user_id = :user_id AND wake_time IS NOT NULL
+        ORDER BY sleep_time DESC LIMIT 7
+    '''
     params = {'user_id': user_id}
     try:
         records = execute_query(query, params).fetchall()
@@ -949,7 +950,7 @@ async def sleep_chart(client: Client, message: Message, user: User = None):
             buf.seek(0)
             # Отправка графика пользователю
             await client.send_photo(chat_id=user_id, photo=buf, caption='Ваш график сна за последние 7 дней.',
-                              reply_markup=get_initial_keyboard())
+                                    reply_markup=get_initial_keyboard())
             plt.close()
             logger.info(f"Пользователь {user_id} запросил график сна")
         else:
@@ -1000,9 +1001,9 @@ async def export_data(client: Client, message: Message, user: User = None):
         logger.error(f"Пользователь {user} не является валидным: {e}")
     user_id = user.id
     query = '''
-            SELECT * FROM sleep_records
-            WHERE user_id = :user_id
-        '''
+        SELECT * FROM sleep_records
+        WHERE user_id = :user_id
+    '''
     params = {'user_id': user_id}
     try:
         records = execute_query(query, params).fetchall()
@@ -1088,7 +1089,7 @@ async def show_reminders_menu(client: Client, message: Message, user: User = Non
 
     try:
         reminders_record = execute_query("SELECT reminder_time FROM reminders WHERE user_id = :user_id",
-                      {'user_id': user_id}).fetchone()
+                                         {'user_id': user_id}).fetchone()
         if reminders_record:
             reminder_time = reminders_record['reminder_time']
             text = f"У вас уже есть установленное напоминания: {reminder_time}."
@@ -1199,7 +1200,7 @@ async def handle_callback_query(client: Client, callback_query: CallbackQuery):
         await export_data(client, callback_query.message, user)
     elif data == "back_to_menu":
         await callback_query.message.reply_text("Вы вернулись.",
-                                          reply_markup=get_initial_keyboard())
+                                                reply_markup=get_initial_keyboard())
         await send_main_menu(client, callback_query.message.chat.id)
     # Уведомляем Telegram, что колбэк обработан
     await callback_query.message.edit_reply_markup(reply_markup=None)
@@ -1295,13 +1296,13 @@ async def handle_button_presses(client, message: Message):
 
                 state = user_states[user_id]
 
-                user_state_navigate(state, client, message, user)
+                await user_state_navigate(state, client, message, user)
         else:
             if user.id in user_states and user_states[user.id] != UserStates.STATE_NONE:
 
                 state = user_states[user_id]
 
-                user_state_navigate(state, client, message, user)
+                await user_state_navigate(state, client, message, user)
 
                 # message.reply_text("Пожалуйста, ответьте на предыдущий вопрос.", reply_markup=ForceReply())
             # Неизвестная команда
@@ -1334,7 +1335,7 @@ async def handle_force_reply(client, message: Message):
 
     state = user_states[user_id]
 
-    user_state_navigate(state, client, message, user)
+    await user_state_navigate(state, client, message, user)
 
 
 @app.on_message(filters.regex(r'^/'), group=1)
