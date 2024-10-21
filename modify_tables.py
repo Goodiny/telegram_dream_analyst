@@ -1,7 +1,10 @@
 import sqlite3
 
+from config import DATABASE_URL
+
+
 def execute_query(query, params=None, row_factory=True):
-    with sqlite3.connect('sleep_data.db', check_same_thread=False) as conn:
+    with sqlite3.connect(DATABASE_URL, check_same_thread=False) as conn:
         if row_factory:
             conn.row_factory = sqlite3.Row  # Для доступа к столбцам по имени
         cursor = conn.cursor()
