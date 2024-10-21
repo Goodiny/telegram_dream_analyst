@@ -45,9 +45,6 @@ with open('logging.json', 'r') as f:
 logger = logging.getLogger('bot')
 
 # Инициализация переменных окружения
-# API_ID = int(os.environ.get("API_ID"))
-# API_HASH = os.environ.get("API_HASH")
-# BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 # Создание экземпляра клиента бота
 app = Client("sleep_tracker_bot",
