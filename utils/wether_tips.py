@@ -3,24 +3,7 @@ import logging.config
 
 import requests
 
-from config import WEATHER_API_KEY, WEATHER_BASE_URL
-
-# API_KEY = "48390dd0b5cc12b9923ac4bc75063c85"
-# BASE_URL = "http://api.openweathermap.org/data/2.5/weather"
-
-# Настройка логирования
-# logging.basicConfig(
-#     level=logging.INFO,  # Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-#     handlers=[
-#         logging.FileHandler("bot.log"),  # Запись логов в файл bot.log
-#         logging.StreamHandler()  # Вывод логов в консоль
-#     ]
-# )
-
-with open('logging.json', 'r') as f:
-    config = json.load(f)
-    logging.config.dictConfig(config)
+from configs.config import WEATHER_API_KEY, WEATHER_BASE_URL
 
 logger = logging.getLogger(__name__)
 

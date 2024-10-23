@@ -3,7 +3,7 @@ import logging.config
 
 import requests
 
-from config import OPENCAGE_API_KEY
+from configs.config import OPENCAGE_API_KEY
 
 # OPENCAGE_API_KEY = "47f19b58763542309908925d4357927b"
 
@@ -16,10 +16,6 @@ from config import OPENCAGE_API_KEY
 #         logging.StreamHandler()  # Вывод логов в консоль
 #     ]
 # )
-
-with open('logging.json', 'r') as f:
-    config = json.load(f)
-    logging.config.dictConfig(config)
 
 logger = logging.getLogger(__name__)
 
