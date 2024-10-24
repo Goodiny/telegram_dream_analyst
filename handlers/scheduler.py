@@ -6,7 +6,7 @@ from apscheduler.triggers.cron import CronTrigger
 from pyrogram import Client
 
 from db.modify_tables import execute_query, get_all_reminders, get_all_users, get_all_users_city_name, \
-    get_sleep_goal_user, get_reminder_time_db, get_sleep_time_without_wake_db
+    get_sleep_goal_user, get_reminder_time_db, get_sleep_time_without_wake_db, get_user_wake_time
 from utils.wether_tips import get_weather, get_sleep_advice_based_on_weather
 
 logger = logging.getLogger()
@@ -91,14 +91,10 @@ def setup_scheduler(app: Client):
 
 
 def calculate_weather_reminder(user_id: int):
-    user_sleep_goal = get_sleep_goal_user(user_id)
     reminder = get_reminder_time_db(user_id)
-    if user_sleep_goal and user_sleep_goal["sleep_goal"] and reminder and reminder["reminder_time"]:
-        sleep_goal = user_sleep_goal["sleep_goal"]
+    if reminder and reminder["reminder_time"]:
         reminder_time = datetime.strptime(reminder["reminder_time"], "%H:%M").time()
-        reminder_datetime = datetime.combine(datetime.now(), reminder_time)
-        weather_time = reminder_datetime - timedelta(hours=sleep_goal)
-        return weather_time
+        return reminder_time
     else:
         return datetime.combine(datetime.now(), time(20, 00))
 
@@ -106,12 +102,12 @@ def calculate_weather_reminder(user_id: int):
 # Функция для расчета времени отхода ко сну
 def calculate_bedtime(user_id: int):
     user = get_sleep_goal_user(user_id)
-    reminder = get_reminder_time_db(user_id)
-    if user and user['sleep_goal'] and reminder and reminder['reminder_time']:
+    wake_time = get_user_wake_time(user_id)
+    if user and user['sleep_goal'] and wake_time and wake_time['wake_time']:
         sleep_goal = user['sleep_goal']
-        reminder_time = datetime.strptime(reminder['reminder_time'], "%H:%M").time()
-        # Предположим, что пользователь хочет вставать в reminder_time
-        wake_up_time = datetime.combine(datetime.now(), reminder_time)
+        wake_time_dt = datetime.strptime(wake_time['wake_time'], "%H:%M").time()
+        # Предположим, что пользователь хочет вставать в wake_time и он определен
+        wake_up_time = datetime.combine(datetime.now(), wake_time_dt)
         bedtime = wake_up_time - timedelta(hours=sleep_goal)
         return bedtime.time()
     else:
