@@ -156,32 +156,60 @@ def create_triggers_db():
 # GET
 
 def get_all_sleep_records(user_id: int):
-    return execute_query('SELECT * FROM sleep_records WHERE user_id = :user_id', {"user_id": user_id}).fetchall()
+    return execute_query('SELECT * FROM sleep_records WHERE user_id = :user_id',
+                         {"user_id": user_id}).fetchall()
 
 
 def get_city_name(user_id: int):
-    return execute_query('SELECT city_name FROM users WHERE id = :user_id', {"user_id": user_id}).fetchone()
+    return execute_query('SELECT city_name FROM users WHERE id = :user_id',
+                         {"user_id": user_id}).fetchone()
 
 
 def get_has_provided_location(user_id: int):
-    return execute_query('SELECT user, has_provided_location FROM users WHERE uaser_id = ?',
-                         (user_id,)).fetchone()
+    return execute_query('SELECT user, has_provided_location FROM users WHERE uaser_id = :user_id',
+                         {'user_id': user_id}).fetchone()
 
 
-def get_reminder(user_id: int):
-    return execute_query('SELECT * FROM reminders WHERE user_id = ?', (user_id,)).fetchone()
+def get_reminder_db(user_id: int):
+    return execute_query('SELECT * FROM reminders WHERE user_id = :user_id', {'user_id': user_id}).fetchone()
+
+
+def get_reminder_time_db(user_id: int):
+    return execute_query(
+        'SELECT reminder_time FROM reminders WHERE user_id = :user_id',
+        {'user_id': user_id}).fetchone()
 
 
 def get_all_reminders():
     return execute_query('SELECT user_id FROM reminders').fetchall()
 
 
+def get_all_users():
+    return execute_query('SELECT * FROM users').fetchall()
+
+
+def get_all_users_city_name():
+    return execute_query('SELECT id, city_name FROM users').fetchall()
+
+
+def get_sleep_goal_user(user_id: int):
+    return execute_query('SELECT sleep_goal FROM users WHERE id = :user_id',
+                         {'user_id': user_id}).fetchone()
+
+
 def get_sleep_records_per_week(user_id: int):
     return execute_query('''
             SELECT sleep_time, wake_time FROM sleep_records
-            WHERE user_id = ? AND wake_time IS NOT NULL
+            WHERE user_id = :user_id AND wake_time IS NOT NULL
             ORDER BY sleep_time DESC LIMIT 7
-        ''', (user_id,)).fetchall()
+        ''', {'user_id': user_id}).fetchall()
+
+
+def get_sleep_time_without_wake_db(user_id: int):
+    return execute_query('''
+        SELECT sleep_time FROM sleep_records 
+        WHERE user_id = :user_id AND wake_time IS NULL
+        ''', {'user_id': user_id}).fetchone()
 
 
 def get_wake_time_null(user_id: int):
@@ -197,9 +225,9 @@ def get_wake_time_null(user_id: int):
 def save_phone_number(user_id: int, phone_number: str):
     execute_query('''
             UPDATE users
-            SET phone_number = ?
-            WHERE id = ?
-        ''', (phone_number, user_id))
+            SET phone_number = :phone_number
+            WHERE id = :user_id
+        ''', {"phone_number": phone_number, "user_id": user_id})
 
 
 def save_wake_time_user_db(user_id: int, wake_time: str):
@@ -207,7 +235,7 @@ def save_wake_time_user_db(user_id: int, wake_time: str):
            UPDATE users 
            SET wake_time = :wake_time
            WHERE id = :user_id
-       ''', (wake_time, user_id))
+       ''', {"wake_time": wake_time, "user_id": user_id})
 
 
 def save_sleep_time_db(user_id: int, sleep_time: str):
@@ -220,64 +248,64 @@ def save_sleep_time_db(user_id: int, sleep_time: str):
 def save_wake_time_records_db(user_id: int, wake_time: str):
     return execute_query('''
         UPDATE sleep_records
-        SET wake_time = ?
-        WHERE user_id = ? AND wake_time IS NULL
-    ''', (wake_time, user_id))
+        SET wake_time = :wake_time
+        WHERE user_id = :user_id AND wake_time IS NULL
+    ''', {"wake_time": wake_time, "user_id": user_id})
 
 
 def save_mood_db(user_id, mood: int):
     execute_query('''
             UPDATE sleep_records
-            SET mood = ?
+            SET mood = :mood
             WHERE sleep_time IN (
                 SELECT sleep_time FROM sleep_records 
-                WHERE user_id = ? AND wake_time IS NOT NULL
+                WHERE user_id = :user_id AND wake_time IS NOT NULL
                 ORDER BY sleep_time DESC 
                 LIMIT 1
             );
-        ''', (mood, user_id))
+        ''', {"mood": mood, "user_id": user_id})
 
 
 def save_reminder_time_db(user_id: int, reminder_time: str):
     execute_query('''
                 INSERT OR REPLACE INTO reminders (user_id, reminder_time)
-                VALUES (?, ?)
-            ''', (user_id, reminder_time))
+                VALUES (:user_id, :reminder_time)
+            ''', {"user_id": user_id, "reminder_time": reminder_time})
 
 
 def save_sleep_quality_db(user_id: int, quality: int):
         execute_query('''
             UPDATE sleep_records
-            SET sleep_quality = ?
+            SET sleep_quality = :quality
             WHERE sleep_time IN (
                 SELECT sleep_time FROM sleep_records 
-                WHERE user_id = ? AND wake_time IS NOT NULL
+                WHERE user_id = :user_id AND wake_time IS NOT NULL
                 ORDER BY sleep_time DESC 
                 LIMIT 1
             );
-        ''', (quality, user_id))
+        ''', {"quality": quality, "user_id": user_id})
 
 
 def save_sleep_goal_db(user_id: int, goal: float):
     execute_query('''
             UPDATE users
-            SET sleep_goal = ?
-            WHERE id = ?
-        ''', (goal, user_id))
+            SET sleep_goal = :goal
+            WHERE id = :user_id
+        ''', {"goal": goal, "user_id": user_id})
 
 
 # DELETE
 
 def delete_sleep_rocords_db(user_id: int):
-    execute_query('DELETE FROM sleep_records WHERE user_id = ?', (user_id,))
+    execute_query('DELETE FROM sleep_records WHERE user_id = :user_id', {"user_id": user_id})
 
 
 def delete_reminder_db(user_id: int):
-    execute_query('DELETE FROM reminders WHERE user_id = ?',(user_id,))
+    execute_query('DELETE FROM reminders WHERE user_id = :user_id',{"user_id": user_id})
 
 
 def delete_user_db(user_id: int):
-    execute_query('DELETE FROM users WHERE id = ?', (user_id,))
+    execute_query('DELETE FROM users WHERE id = :user_id', {"user_id": user_id})
 
 
 def delete_all_data_user_db(user_id: int):

@@ -1,11 +1,12 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from pyrogram import Client
 
-from db.modify_tables import execute_query, get_all_reminders
+from db.modify_tables import execute_query, get_all_reminders, get_all_users, get_all_users_city_name, \
+    get_sleep_goal_user, get_reminder_time_db, get_sleep_time_without_wake_db
 from utils.wether_tips import get_weather, get_sleep_advice_based_on_weather
 
 logger = logging.getLogger()
@@ -19,14 +20,11 @@ def setup_scheduler(app: Client):
             current_time = now.time()
             for user in users:
                 user_id = user['user_id']
-                sleep_record_count = execute_query('''
-                            SELECT sleep_time FROM sleep_records 
-                            WHERE user_id = :user_id AND sleep_time IS NOT NULL AND wake_time IS NULL
-                        ''', {'user_id': user_id}).rowcount
+                sleep_record = get_sleep_time_without_wake_db(user_id)
                 bedtime = calculate_bedtime(user_id)
                 if (bedtime and current_time.hour == bedtime.hour
                         and current_time.minute == bedtime.minute
-                        and not sleep_record_count):
+                        and not sleep_record):
                     try:
                         await app.send_message(chat_id=user_id,
                                                text="🌙 Пора ложиться спать, чтобы достичь вашей цели "
@@ -39,7 +37,7 @@ def setup_scheduler(app: Client):
 
     async def send_wake_up_reminder():
         try:
-            users = execute_query('SELECT user_id FROM reminders').fetchall()
+            users = get_all_reminders()
             now = datetime.now()
             current_time = now.time()
             for user in users:
@@ -59,8 +57,9 @@ def setup_scheduler(app: Client):
     async def daily_weather_reminder():
         try:
             # Получаем всех пользователей и их города из базы данных
-            users = execute_query("SELECT id, city_name FROM users").fetchall()
-
+            users = get_all_users_city_name()
+            now = datetime.now()
+            current_time = now.time()
             for user in users:
                 user_id, city = user
                 weather = get_weather(city)
@@ -74,28 +73,40 @@ def setup_scheduler(app: Client):
                         f"Скорость ветра: {weather['wind_speed']} м/с\n\n"
                         f"Советы по улучшению сна:\n{advice}"
                     )
-                    try:
-                        await app.send_message(chat_id=user_id, text=response)
-                    except Exception as e:
-                        logger.error(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
+                    weather_time = calculate_weather_reminder(user_id)
+                    if weather_time and current_time.hour == weather_time.hour and \
+                            current_time.minute == weather_time.minute:
+                        try:
+                            await app.send_message(chat_id=user_id, text=response)
+                        except Exception as e:
+                            logger.error(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
         except Exception as e:
             logger.error(f"Ошибка в функции daily_weather_reminder: {e}")
 
     scheduler = AsyncIOScheduler()
     scheduler.add_job(send_sleep_reminder, CronTrigger(minute='*'))
     scheduler.add_job(send_wake_up_reminder, CronTrigger(minute='*'))
-    scheduler.add_job(daily_weather_reminder, CronTrigger(hour=14, minute=4))
+    scheduler.add_job(daily_weather_reminder, CronTrigger(minute='*'))
     scheduler.start()
 
 
+def calculate_weather_reminder(user_id: int):
+    user_sleep_goal = get_sleep_goal_user(user_id)
+    reminder = get_reminder_time_db(user_id)
+    if user_sleep_goal and user_sleep_goal["sleep_goal"] and reminder and reminder["reminder_time"]:
+        sleep_goal = user_sleep_goal["sleep_goal"]
+        reminder_time = datetime.strptime(reminder["reminder_time"], "%H:%M").time()
+        reminder_datetime = datetime.combine(datetime.now(), reminder_time)
+        weather_time = reminder_datetime - timedelta(hours=sleep_goal)
+        return weather_time
+    else:
+        return datetime.combine(datetime.now(), time(20, 00))
+
+
 # Функция для расчета времени отхода ко сну
-def calculate_bedtime(user_id):
-    user = execute_query(
-        'SELECT sleep_goal FROM users WHERE id = :user_id',
-        {'user_id': user_id}).fetchone()
-    reminder = execute_query(
-        'SELECT reminder_time FROM reminders WHERE user_id = :user_id',
-        {'user_id': user_id}).fetchone()
+def calculate_bedtime(user_id: int):
+    user = get_sleep_goal_user(user_id)
+    reminder = get_reminder_time_db(user_id)
     if user and user['sleep_goal'] and reminder and reminder['reminder_time']:
         sleep_goal = user['sleep_goal']
         reminder_time = datetime.strptime(reminder['reminder_time'], "%H:%M").time()
@@ -107,20 +118,16 @@ def calculate_bedtime(user_id):
         return None
 
 
-def calculate_wake_up_time(user_id):
-    user = execute_query('SELECT sleep_goal FROM users WHERE id = :user_id',
-                         {'user_id': user_id}).fetchone()
-    sleep_record = execute_query('''
-        SELECT sleep_time FROM sleep_records 
-        WHERE user_id = :user_id AND wake_time IS NULL
-        ''', {'user_id': user_id}).fetchone()
+def calculate_wake_up_time(user_id: int):
+    user = get_sleep_goal_user(user_id)
+    sleep_record = get_sleep_time_without_wake_db(user_id)
     if user and user['sleep_goal'] and sleep_record and sleep_record['sleep_time']:
         sleep_goal = user['sleep_goal']
         sleep_time_str = sleep_record['sleep_time']
         sleep_time = datetime.strptime(sleep_time_str[:-10], "%Y-%m-%dT%H:%M")
         # Преобразовываем в datetime и плюсуем желаемую цель сна
         sleep_datetime = datetime.combine(sleep_time, sleep_time.time())
-        wake_up_time = sleep_datetime + timedelta(hours=sleep_goal)
+        wake_up_time = sleep_time + timedelta(hours=sleep_goal)
         return wake_up_time.time()
     else:
         return None
