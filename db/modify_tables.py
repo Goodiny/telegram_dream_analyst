@@ -152,6 +152,17 @@ def create_triggers_db():
         END;
     ''')
 
+    execute_query('''
+        CREATE TRIGGER after_sleep_records_insert_new_user 
+        AFTER INSERT ON sleep_records
+        FOR EACH ROW
+        WHEN (SELECT COUNT(id) FROM users WHERE id=NEW.user_id) = 0
+        BEGIN
+          INSERT INTO users (id)
+          VALUES (NEW.user_id);
+        END
+    ''')
+
 
 # GET
 
@@ -190,6 +201,11 @@ def get_all_users():
 
 def get_all_users_city_name():
     return execute_query('SELECT id, city_name FROM users').fetchall()
+
+
+def get_user_wake_time(user_id: int):
+    return execute_query('SELECT id, wake_time FROM users WHERE id = :user_id',
+                         {"user_id": user_id}).fetchone()
 
 
 def get_sleep_goal_user(user_id: int):
@@ -337,7 +353,9 @@ def modify_table():
                 last_name TEXT,
                 phone_number TEXT,
                 city_name TEXT,
-                sleep_goal REAL DEFAULT 8.0
+                sleep_goal REAL DEFAULT 8.0,
+                wake_time TEXT,
+                has_provided_location INT DEFAULT 0 
             );
         ''')
 

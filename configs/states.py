@@ -16,4 +16,4 @@ class UserStates(Enum):
     STATE_WAITING_WAKE_TIME = auto()
     STATE_WAITING_SAVE_MOOD = auto()
     STATE_WAITING_CONFIRM_DELETE = auto()
-    STATE_WAITING_LOCATION = auto()
+    STATE_WAITING_PROVIDED_LOCATION = auto()

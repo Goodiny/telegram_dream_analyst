@@ -35,6 +35,8 @@ async def user_state_navigate(state: UserStates, client: Client, message: Messag
         await save_sleep_quality(client, message, user)
     elif state == UserStates.STATE_WAITING_SLEEP_GOAL:
         await save_sleep_goal(client, message, user)
+    elif state == UserStates.STATE_WAITING_WAKE_TIME:
+        await save_wake_time(client, message, user)
     elif state == UserStates.STATE_WAITING_SAVE_MOOD:
         await save_mood(client, message, user)
     elif state == UserStates.STATE_WAITING_CONFIRM_DELETE:
@@ -116,14 +118,17 @@ def setup_handlers(app: Client):
             # Если сообщение является ответом на ForceReply, обрабатываем его соответствующим образом
             if message.reply_to_message:
 
-                if user_id not in user_states:
+                if user_id not in user_states or user_states[user.id] == UserStates.STATE_NONE:
+                    logger.debug("Message_Reply without UserStates")
                     await message.reply_text("Пожалуйста, используйте соответствующую команду для начала.",
                                              reply_markup=get_back_keyboard())
+                    await message.delete()
                     await send_main_menu(client, user_id)
                     return
 
                 # Обработка ответов на запросы, например, set_reminder, save_reminder_time и т.д.
                 elif user_id in user_states and user_states[user.id] != UserStates.STATE_NONE:
+                    logger.debug("Message_Reply on UserStates")
                     await message.reply_text("Пожалуйста, ответьте на предыдущий вопрос.", reply_markup=ForceReply())
 
                     state = user_states[user_id]
@@ -159,49 +164,53 @@ def setup_handlers(app: Client):
         except Exception as e:
             logger.error(f"Пользователь {user} не является валидным: {e}")
 
+        message = callback_query.message
         data = callback_query.data
         if data == "sleep":
             # Вызываем функцию sleep_time
-            await sleep_time(client, callback_query.message, user)
+            await sleep_time(client, message, user)
         elif data == "wake":
             # Вызываем функцию wake_time
-            await wake_time(client, callback_query.message, user)
+            await wake_time(client, message, user)
         elif data == "stats":
             # Вызываем функцию sleep_stats
-            await sleep_stats(client, callback_query.message, user)
+            await sleep_stats(client, message, user)
         elif data == "reminders":
-            await show_reminders_menu(client, callback_query.message, user)
+            await show_reminders_menu(client, message, user)
         elif data == "set_reminder":
-            await set_reminder(client, callback_query.message, user)
+            await set_reminder(client, message, user)
         elif data == "reset_reminder":
-            await remove_reminder(client, callback_query.message, user)
+            await remove_reminder(client, message, user)
         elif data == "request_contact":
-            await request_contact(client, callback_query.message)
+            await request_contact(client, message)
         elif data == "sleep_chart":
-            await sleep_chart(client, callback_query.message, user)
+            await sleep_chart(client, message, user)
         elif data == "sleep_goals":
-            await set_sleep_goal(client, callback_query.message, user)
+            await set_sleep_goal(client, message, user)
         elif data == "sleep_characteristics":
             await show_sleep_characteristics_menu(client, user.id)
         elif data == "sleep_tips":
-            await sleep_tips(client, callback_query.message, user)
+            await sleep_tips(client, message, user)
         elif data == "user_data_management":
             await show_user_data_management_menu(client, user.id)
-            # Обработка подпунктов меню
         elif data == "rate_mood":
-            await log_mood(client, callback_query.message, user)
+            await log_mood(client, message, user)
+        elif data == "set_wake_time":
+            await set_wake_time(client, message, user)
+        elif data == "weather":
+            await weather_advice(client, message, user)
         elif data == "rate_sleep":
-            await rate_sleep(client, callback_query.message, user)
+            await rate_sleep(client, message, user)
         elif data == "delete_data":
-            await delete_my_data(client, callback_query.message, user)
+            await delete_my_data(client, message, user)
         elif data == "save_data":
-            await export_data(client, callback_query.message, user)
+            await export_data(client, message, user)
         elif data == "back_to_menu":
             await callback_query.message.reply_text("Вы вернулись.",
                                                     reply_markup=get_initial_keyboard())
-            await send_main_menu(client, callback_query.message.chat.id)
+            await send_main_menu(client, message.chat.id)
         # Уведомляем Telegram, что колбэк обработан
-        await callback_query.message.edit_reply_markup(reply_markup=None)
+        await message.edit_reply_markup(reply_markup=None)
         await callback_query.answer()
 
     @app.on_inline_query()
@@ -250,6 +259,7 @@ def setup_handlers(app: Client):
             await send_main_menu(client, user_id)
             return
 
+        logger.debug("user_id in user_states")
         state = user_states[user_id]
 
         await user_state_navigate(state, client, message, user)

@@ -3,21 +3,15 @@ from __future__ import annotations
 import logging.config
 
 from pyrogram import Client
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 import sqlite3
-from datetime import datetime
 from configs.config import TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_BOT_TOKEN
 from handlers.handlers import setup_handlers
 
-from db.modify_tables import execute_query, database_initialize, create_triggers_db
-from handlers.scheduler import calculate_bedtime, calculate_wake_up_time, setup_scheduler
-from utils.wether_tips import get_sleep_advice_based_on_weather, get_weather
+from db.modify_tables import database_initialize, create_triggers_db
+from handlers.scheduler import setup_scheduler
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
-
-# Инициализация переменных окружения
 
 # Создание экземпляра клиента бота
 app = Client("sleep_tracker_bot",

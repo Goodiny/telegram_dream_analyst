@@ -13,7 +13,8 @@ from pyrogram.types import User, Message, ForceReply, InlineKeyboardMarkup, Inli
 
 from configs.states import UserStates, user_states
 from db.modify_tables import execute_query, add_user_to_db, get_user_stats, get_all_sleep_records, get_city_name, \
-    delete_reminder_db, get_sleep_records_per_week, save_wake_time_records_db, get_wake_time_null, save_sleep_time_db
+    delete_reminder_db, get_sleep_records_per_week, save_wake_time_records_db, get_wake_time_null, save_sleep_time_db, \
+    get_user_wake_time
 from handlers.keyboards import get_initial_keyboard, request_location
 from utils.utils import is_valid_user
 from utils.wether_tips import get_sleep_advice_based_on_weather, get_weather
@@ -290,11 +291,29 @@ async def set_wake_time(client: Client, message: Message, user: User = None):
         logger.error(f"Пользователь {user} не является валидным: {e}")
     user_id = user.id
     user_states[user_id] = UserStates.STATE_WAITING_WAKE_TIME
-    await message.reply_text(
-        "Пожалуйста, введите время в котором вы хотели бы проснутся "
-        "в формате HH:MM (24 часовой формат). \nНапример: 7:45",
+    try:
+        wake_time_str = get_user_wake_time(user_id)
+        if wake_time_str and wake_time_str['wake_time']:
+            wake_time_dt = datetime.strptime(wake_time_str['wake_time'], "%H:%M")
+            response = (
+                f"Время пробуждения установлено на {wake_time_str['wake_time']}.\n\n"
+                f"Пожалуйста, введите время в котором вы хотели бы проснутся "
+                f"в формате HH:MM (24 часовой формат). \nНапример: 7:45"
+            )
+        else:
+            response = (
+                "Время пробуждения не установлено.\n\n"
+                "Пожалуйста, введите время в котором вы хотели бы проснутся "
+                "в формате HH:MM (24 часовой формат). \nНапример: 7:45"
+            )
+
+        await message.reply_text(
+        response,
         reply_markup=ForceReply()
-    )
+        )
+    except Exception as e:
+        logger.error(f"Произошла ошибка при попытке пользователя {user_id} "
+                     f"установить отложенное время пробуждения: {e}")
 
 
 async def weather_advice(client: Client, message: Message, user: User = None):
@@ -327,7 +346,7 @@ async def weather_advice(client: Client, message: Message, user: User = None):
                 f"Советы по улучшению сна:\n{advice}"
             )
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Получить совет по сну", callback_data="sleep_tips")]
+                [InlineKeyboardButton("← Назад", callback_data="back_to_menu"), InlineKeyboardButton("Получить совет по сну", callback_data="sleep_tips")]
             ])
         else:
             response = "Извините, не удалось получить данные о погоде. Попробуйте позже."

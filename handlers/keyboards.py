@@ -4,7 +4,7 @@ from pyrogram import Client
 from pyrogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, \
     ReplyKeyboardRemove, User, Message
 
-from db.modify_tables import execute_query
+from db.modify_tables import execute_query, get_reminder_time_db
 from utils.utils import is_valid_user
 
 
@@ -66,6 +66,10 @@ def main_menu_keyboard():
             InlineKeyboardButton("💡 Советы по сну", callback_data="sleep_tips")
         ],
         [
+            InlineKeyboardButton("🌦 Прогноз погоды", callback_data="weather"),
+            InlineKeyboardButton("📝 Установить время пробуждения", callback_data="set_wake_time")
+        ],
+        [
             InlineKeyboardButton("👤 Управление данными", callback_data="user_data_management"),
             InlineKeyboardButton("📱 Отправка номера", callback_data="request_contact")
         ]
@@ -73,8 +77,28 @@ def main_menu_keyboard():
     return keyboard
 
 
+def character_keyboard():
+    keyboard = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("😊 Ваше настроение", callback_data="rate_mood")],
+            [InlineKeyboardButton("🛌 Оценка сна", callback_data="rate_sleep")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]
+        ]
+    )
+    return keyboard
+
+
+def data_management_keyboard():
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("💾 Сохранение данных", callback_data="save_data")],
+            [InlineKeyboardButton("🗑 Удаление данных", callback_data="delete_data")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]
+        ]
+    )
+
+
 async def send_main_menu(client: Client, chat_id: int):
-    keyboard = main_menu_keyboard()
     await client.send_message(
         chat_id=chat_id,
         text='Главное меню.',
@@ -83,37 +107,23 @@ async def send_main_menu(client: Client, chat_id: int):
     await client.send_message(
         chat_id=chat_id,
         text="Выберите действие:",
-        reply_markup=keyboard
+        reply_markup=main_menu_keyboard()
     )
 
 
 async def show_sleep_characteristics_menu(client: Client, user_id: int):
-    keyboard = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("😊 Ваше настроение", callback_data="rate_mood")],
-            [InlineKeyboardButton("🛌 Оценка сна", callback_data="rate_sleep")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]
-        ]
-    )
     await client.send_message(
         chat_id=user_id,
         text="Выберите характеристику сна:",
-        reply_markup=keyboard
+        reply_markup=character_keyboard()
     )
 
 
 async def show_user_data_management_menu(client: Client, user_id: int):
-    keyboard = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("💾 Сохранение данных", callback_data="save_data")],
-            [InlineKeyboardButton("🗑 Удаление данных", callback_data="delete_data")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]
-        ]
-    )
     await client.send_message(
         chat_id=user_id,
         text="Управление данными пользователя:",
-        reply_markup=keyboard
+        reply_markup=data_management_keyboard()
     )
 
 
@@ -127,8 +137,7 @@ async def show_reminders_menu(client: Client, message: Message, user: User = Non
     user_id = user.id
 
     try:
-        reminders_record = execute_query("SELECT reminder_time FROM reminders WHERE user_id = :user_id",
-                                         {'user_id': user_id}).fetchone()
+        reminders_record = get_reminder_time_db(user_id)
         if reminders_record:
             reminder_time = reminders_record['reminder_time']
             text = f"У вас уже есть установленное напоминания: {reminder_time}."
