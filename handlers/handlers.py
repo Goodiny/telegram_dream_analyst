@@ -5,15 +5,17 @@ from datetime import datetime
 from uuid import uuid4
 
 from pyrogram import Client, filters
-from pyrogram.types import Message, User, ForceReply, CallbackQuery, InputTextMessageContent, InlineQueryResultArticle
+from pyrogram.types import Message, User, ForceReply, CallbackQuery, InputTextMessageContent, InlineQueryResultArticle, \
+    ReplyKeyboardRemove
 
 from handlers.commands import sleep_stats, wake_time, sleep_time, sleep_chart, set_sleep_goal, log_mood, rate_sleep, \
     set_reminder, sleep_tips, remove_reminder, set_wake_time, weather_advice, export_data, delete_my_data
-from handlers.keyboards import get_initial_keyboard, send_main_menu, show_sleep_characteristics_menu, get_back_keyboard, \
-    request_contact, request_location, show_user_data_management_menu, show_reminders_menu
+from handlers.keyboards import get_initial_keyboard, get_back_keyboard, get_reminder_menu_keyboard, \
+    data_management_keyboard, main_menu_keyboard, character_keyboard, get_request_keyboard
 from utils.location_detect import get_city_from_coordinates
 from db.modify_tables import add_user_to_db, execute_query, save_user_city, get_user_stats, save_phone_number, \
-    save_mood_db, save_wake_time_user_db, delete_all_data_user_db, save_reminder_time_db, save_sleep_quality_db, save_sleep_goal_db
+    save_mood_db, save_wake_time_user_db, delete_all_data_user_db, save_reminder_time_db, save_sleep_quality_db, \
+    save_sleep_goal_db, get_reminder_time_db
 from configs.states import UserStates, user_states
 from utils.utils import is_valid_user
 
@@ -449,6 +451,76 @@ async def save_mood(client: Client, message: Message, user: User = None):
                 reply_markup=ForceReply()
             )
             logger.critical(f"Произошла ошибка при записи настроения: {e}")
+
+
+async def send_main_menu(client: Client, chat_id: int):
+    await client.send_message(
+        chat_id=chat_id,
+        text='Главное меню.',
+        reply_markup=ReplyKeyboardRemove()
+    )
+    await client.send_message(
+        chat_id=chat_id,
+        text="Выберите действие:",
+        reply_markup=main_menu_keyboard()
+    )
+
+
+async def show_sleep_characteristics_menu(client: Client, user_id: int):
+    await client.send_message(
+        chat_id=user_id,
+        text="Выберите характеристику сна:",
+        reply_markup=character_keyboard()
+    )
+
+
+async def show_user_data_management_menu(client: Client, user_id: int):
+    await client.send_message(
+        chat_id=user_id,
+        text="Управление данными пользователя:",
+        reply_markup=data_management_keyboard()
+    )
+
+
+async def show_reminders_menu(client: Client, message: Message, user: User = None):
+    if user is None:
+        user = message.from_user
+    try:
+        is_valid_user(user)
+    except Exception as e:
+        logger.error(f"Пользователь {user} не является валидным: {e}")
+    user_id = user.id
+
+    try:
+        reminders_record = get_reminder_time_db(user_id)
+        if reminders_record:
+            reminder_time = reminders_record['reminder_time']
+            text = f"У вас уже есть установленное напоминания: {reminder_time}."
+            keyboard = get_reminder_menu_keyboard(True)
+        else:
+            text = "У вас нет установленного напоминания."
+            keyboard = get_reminder_menu_keyboard(False)
+        await message.reply_text(text, reply_markup=ReplyKeyboardRemove())
+        await client.send_message(
+            chat_id=user_id,
+            text="Что вы хотите сделать?",
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        logger.error(f'При получении данных от пользователя {user_id} произошла ошибка: {e}')
+        await message.reply_text("Произошла ошибка при получении данных, попробуйте ещё раз или вернитесь назад")
+
+
+async def request_contact(client: Client, message: Message):
+    await message.reply_text(
+        "Пожалуйста, поделитесь своим номером телефона, нажав на кнопку ниже.",
+        reply_markup=get_request_keyboard("contact")
+    )
+
+
+async def request_location(client: Client, message: Message):
+    await message.reply_text("Пожалуйста, поделитесь своим местоположением, чтобы я мог определить ваш город.",
+                             reply_markup=get_request_keyboard("location"))
 
 
 async def save_wake_time(client: Client, message: Message, user: User = None):

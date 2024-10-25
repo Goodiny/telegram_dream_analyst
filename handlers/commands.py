@@ -8,14 +8,12 @@ from datetime import datetime
 
 from matplotlib import pyplot as plt
 from pyrogram import Client
-from pyrogram.types import User, Message, ForceReply, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, \
-    KeyboardButton
-
+from pyrogram.types import User, Message, ForceReply
 from configs.states import UserStates, user_states
-from db.modify_tables import execute_query, add_user_to_db, get_user_stats, get_all_sleep_records, get_city_name, \
+from db.modify_tables import add_user_to_db, get_user_stats, get_all_sleep_records, get_city_name, \
     delete_reminder_db, get_sleep_records_per_week, save_wake_time_records_db, get_wake_time_null, save_sleep_time_db, \
     get_user_wake_time
-from handlers.keyboards import get_initial_keyboard, request_location
+from handlers.keyboards import get_initial_keyboard, get_request_keyboard
 from utils.utils import is_valid_user
 from utils.wether_tips import get_sleep_advice_based_on_weather, get_weather
 
@@ -345,19 +343,17 @@ async def weather_advice(client: Client, message: Message, user: User = None):
                 f"Скорость ветра: {weather['wind_speed']} м/с\n\n"
                 f"Советы по улучшению сна:\n{advice}"
             )
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("← Назад", callback_data="back_to_menu"), InlineKeyboardButton("Получить совет по сну", callback_data="sleep_tips")]
-            ])
+            keyboard = get_request_keyboard("weather")
         else:
             response = "Извините, не удалось получить данные о погоде. Попробуйте позже."
-            keyboard = ReplyKeyboardMarkup([[KeyboardButton("🔙 Назад")]])
+            keyboard = get_request_keyboard()
 
         await message.reply_text(response, reply_markup=keyboard)
 
     except Exception as e:
         logger.error(f"Ошибка при запросе имени города пользователя {user_id}: {e}")
         await message.reply_text("Произошла ошибка при запросе данных о городе, попробуйте ещё раз",
-                                 reply_markup=request_location(client, message)
+                                 reply_markup=get_request_keyboard("location")
                                  )
 
 
