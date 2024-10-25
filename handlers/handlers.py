@@ -938,7 +938,7 @@ async def request_location(client: Client, message: Message):
 
 
 def requires_location(func):
-    async def wrapper(client, message, user: User = None):
+    async def wrapper(client: Client, message: Message, user: User = None):
         if user is None:
             user = message.from_user
         try:
@@ -948,17 +948,32 @@ def requires_location(func):
             return
 
         user_id = user.id
-        result = get_has_provided_location(user_id)
+        try:
+            result = get_has_provided_location(user_id)
+        except Exception as e:
+            logger.error(f"Ошибка при вызове функции get_has_provided_location пользователя {user_id}: {e}")
+            return
 
         if result is None:
-            add_new_user(user)
+            try:
+                add_new_user(user)
+            except Exception as e:
+                logger.error(f"Ошибка при вызове функции add_new_user пользователя {user_id}: {e}")
+                return
+            result = {'has_provided_location': 0}
 
-        has_provided_location = result[0]
+        has_provided_location = result['has_provided_location']
         if not has_provided_location:
-            await message.reply_text("Пожалуйста, отправьте ваше местоположение, прежде чем продолжить.",
-                                     reply_markup=get_request_keyboard("location"))
-            return
-        return await func(client, message)
+            try:
+                await message.reply_text("Пожалуйста, отправьте ваше местоположение, прежде чем продолжить.",
+                                         reply_markup=get_request_keyboard('location'))
+                return
+            except Exception as e:
+                logger.warning(f"Ошибка при вызове метода message_reply пользователя {user_id}: {e}")
+                await message.reply("Пожалуйста, отправьте ваше местоположение, прежде чем продолжить.",
+                                    reply_markup=get_request_keyboard('location'))
+                return
+        return await func(client, message, user)
     return wrapper
 
 
