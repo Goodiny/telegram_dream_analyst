@@ -175,7 +175,7 @@ def get_city_name(user_id: int):
 
 
 def get_has_provided_location(user_id: int):
-    return execute_query('SELECT user, has_provided_location FROM users WHERE uaser_id = :user_id',
+    return execute_query('SELECT id, has_provided_location FROM users WHERE id = :user_id',
                          {'user_id': user_id}).fetchone()
 
 
