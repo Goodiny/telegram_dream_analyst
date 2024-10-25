@@ -62,40 +62,38 @@ def get_user_stats(user_id: int):
         return
 
 
-def add_user_to_db(user: User):
-    if user is None:
-        return  # Игнорируем сообщения без информации о пользователе
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-    user_id = user.id
-    username = user.username
-    first_name = user.first_name
-    last_name = user.last_name
-
-    query = '''
-            INSERT INTO users (id, username, first_name, last_name)
-            VALUES (:id, :username, :first_name, :last_name)
+def add_user_to_db(user_id: int, username: str = "", first_name: str = "", last_name: str = "",
+                   phone_number: str = "", city_name: str = "", sleep_goal: float = 8.0,
+                   wake_time: str = "", has_provided_location: int = 0):
+    execute_query('''
+            INSERT INTO users (id, username, first_name, last_name, 
+            phone_number, cityt_name, sleep_goal, wake_time, has_provided_location
+            )
+            VALUES (
+                :id, :username, :first_name, :last_name, 
+                :phone_number, :city_name, :sleep_goal, 
+                :wake_time, :has_provided_location
+            )
             ON CONFLICT(id) DO UPDATE SET
                 username = :username,
                 first_name = :first_name,
-                last_name = :last_name
-        '''
-
-    params = {
+                last_name = :last_name,
+                phone_number = :phone_number,
+                city_name = :city_name,
+                sleep_goal = :sleep_goal,
+                wake_time = :wake_time,
+                has_provided_location = :has_provided_location
+        ''', {
         'id': user_id,
         'username': username,
         'first_name': first_name,
-        'last_name': last_name
-    }
-
-    try:
-        # Вставляем или обновляем информацию о пользователе в таблицу users
-        execute_query(query, params)
-        logger.info(f"Пользователь {user_id} добавлен или обновлен в таблице users")
-    except Exception as e:
-        logger.error(f"Ошибка при добавлении пользователя {user_id} в базу данных: {e}")
+        'last_name': last_name,
+        'phone_number': phone_number,
+        'city_name': city_name,
+        'sleep_goal': sleep_goal,
+        'wake_time': wake_time,
+        'has_provided_location': has_provided_location
+    })
 
 
 # Инициализация базы данных
