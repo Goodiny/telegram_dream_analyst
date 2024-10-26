@@ -66,6 +66,8 @@ def add_new_user(user: User):
         is_valid_user(user)
     except Exception as e:
         logger.error(f"Пользователь {user} не является валидным: {e}")
+        return
+
     user_id = user.id
     username = user.username
     first_name = user.first_name
@@ -83,24 +85,23 @@ def setup_handlers(app: Client):
     @app.on_message(filters.command("start"))
     async def start(client: Client, message: Message):
         user = message.from_user
+        result = None
         try:
             add_new_user(user)
-        finally:
             # Отправка приветственного сообщения с пользовательской клавиатурой
-
-            # result = execute_query("SELECT has_provided_location FROM users WHERE user_id = ? AND "
-            #                        "has_provided_location = 0",
-            #                        (user.id,)).fetchone()
-            #
-            # if result is None or not result[0]:
-            #     await request_location(client, message)
-            # else:
-            #     await message.reply_text("Добро пожаловать! Вы уже предоставили свою локацию.")
-            await message.reply_text(
-                "👋 Привет! Я бот для отслеживания сна.\n\n"
-                "Выберите действие из меню ниже:",
-                reply_markup=get_initial_keyboard()
-            )
+            result = get_has_provided_location(user.id)
+        except Exception as e:
+            logger.error(f"Ошибка при инициализации пользователя {user.id}: {e}")
+        finally:
+            if result is None or not result['has_provided_location']:
+                await message.reply_text("Пожалуйста, отправьте ваше местоположение, чтобы начать пользоваться ботом.",
+                                         reply_markup=get_request_keyboard('location_only'))
+            else:
+                await message.reply_text(
+                    "Вы уже предоставили свою локацию.\n\n👋 Привет! Я бот для отслеживания сна.\n\n"
+                    "Выберите действие из меню ниже:",
+                    reply_markup=get_initial_keyboard()
+                )
 
     # Обработка нажатий кнопок
     @app.on_message(filters.text & ~filters.regex(r'^/'))

@@ -119,11 +119,11 @@ def data_management_keyboard():
 def get_request_keyboard(contex: str = None):
     if contex is not None:
         contex = contex.lower()
-        if contex.lower() not in {"contact", "location", "weather"}:
+        if contex not in {"contact", "location", "location_only", "weather"}:
             raise ValueError("Данного контекста в данной функции не предусмотренно, "
                              "введите правильный контекст")
         return_button = KeyboardButton("← Вернуться")
-        if contex.lower() == "contact":
+        if contex == "contact":
             contact_button = KeyboardButton(
                 text="Отправить номер телефона",
                 request_contact=True
@@ -133,13 +133,23 @@ def get_request_keyboard(contex: str = None):
                 resize_keyboard=True,
                 one_time_keyboard=True
             )
-        elif contex.lower() == "location":
+        elif contex == "location":
             location_button = KeyboardButton(
                 text="Отправить местоположение",
                 request_location=True
             )
             reply_markup = ReplyKeyboardMarkup(
                 [[return_button, location_button]],
+                resize_keyboard=True,
+                one_time_keyboard=True
+            )
+        elif contex == 'location_only':
+            location_button = KeyboardButton(
+                text="Отправить местоположение",
+                request_location=True
+            )
+            reply_markup = ReplyKeyboardMarkup(
+                [[location_button]],
                 resize_keyboard=True,
                 one_time_keyboard=True
             )
