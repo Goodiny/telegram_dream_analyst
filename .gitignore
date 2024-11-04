@@ -171,5 +171,5 @@ cython_debug/
 *.cfg
 *.conf
 *.config
-#*.json
+logging.json
 #license.txt

@@ -17,11 +17,11 @@ from pyrogram.types import Message, User, ForceReply, CallbackQuery, InputTextMe
 from handlers.keyboards import get_initial_keyboard, get_back_keyboard, get_reminder_menu_keyboard, \
     data_management_keyboard, main_menu_keyboard, character_keyboard, get_request_keyboard
 from utils.location_detect import get_city_from_coordinates
-from db.modify_tables import save_user_city, get_user_stats, save_phone_number, \
+from db.modify_tables import save_user_city, save_phone_number, \
     save_mood_db, save_wake_time_user_db, delete_all_data_user_db, save_reminder_time_db, save_sleep_quality_db, \
     save_sleep_goal_db, get_reminder_time_db, get_has_provided_location, add_user_to_db, get_city_name, \
     get_all_sleep_records, get_user_wake_time, delete_reminder_db, get_sleep_records_per_week, \
-    save_wake_time_records_db, save_sleep_time_db, get_wake_time_null
+    save_wake_time_records_db, save_sleep_time_records_db, get_wake_time_null, get_sleep_record_last_db
 from configs.states import UserStates, user_states
 from utils.utils import is_valid_user
 from utils.wether_tips import get_sleep_advice_based_on_weather, get_weather
@@ -57,6 +57,30 @@ async def user_state_navigate(state: UserStates, client: Client, message: Messag
                                  reply_markup=get_back_keyboard())
         user_states[user_id] = UserStates.STATE_NONE
     await message.delete()
+
+
+def get_user_stats(user_id: int):
+    try:
+        record = get_sleep_record_last_db(user_id)
+        if record:
+            # sleep_time = record['sleep_time']
+            sleep_time = datetime.fromisoformat(record['sleep_time'])
+            wake_time = record['wake_time']
+            if wake_time:
+                wake_time = datetime.fromisoformat(wake_time)
+                duration = wake_time - sleep_time
+                response = (f"🛌 Ваша последняя запись сна:\nС {sleep_time.strftime('%Y-%m-%d %H:%M')} до "
+                            f"{wake_time.strftime('%Y-%m-%d %H:%M')} — {duration}")
+            else:
+                response = f"🛌 Ваша текущая запись сна:\nС {sleep_time.strftime('%Y-%m-%d %H:%M')} — Ещё не проснулись"
+            logger.info(f"Пользователь {user_id} запросил статистику сна")
+            return response
+        else:
+            logger.info(f"Пользователь {user_id} запросил статистику сна, но нет записей")
+            return
+    except Exception as e:
+        logger.error(f"Ошибка при получении статистики сна для пользователя {user_id}: {e}")
+        return
 
 
 def add_new_user(user: User):
@@ -475,7 +499,7 @@ async def sleep_time(client: Client, message: Message, user: User = None):
                 f"Пользователь {user_id} попытался повторно отметить запись сна без записи пробуждения.")
             return
 
-        save_sleep_time_db(user_id, sleep_time_dt.isoformat())
+        save_sleep_time_records_db(user_id, sleep_time_dt.isoformat(sep=' '))
         await message.reply_text(
             f"🌙 Время отхода ко сну отмечено: {sleep_time_dt.strftime('%Y-%m-%d %H:%M:%S')}",
             reply_markup=get_initial_keyboard()
@@ -503,7 +527,7 @@ async def wake_time(client: Client, message: Message, user: User = None):
 
     try:
 
-        if save_wake_time_records_db(user_id, wake_time.isoformat()).rowcount == 0:
+        if save_wake_time_records_db(user_id, wake_time.isoformat(sep=' ')).rowcount == 0:
             await message.reply_text(
                 "❗️ Нет записи о времени сна или уже отмечено пробуждение. "
                 "Используйте /sleep, чтобы начать новую запись.",

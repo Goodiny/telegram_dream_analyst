@@ -27,11 +27,11 @@ except sqlite3.OperationalError as e:
     logger.error(f"Ошибка при создании баззы данных: {e}")
 
 # Создание триггера update_existing_sleep_time
-try:
-    create_triggers_db()
-    logger.info("Триггер update_existing_sleep_time создан")
-except sqlite3.OperationalError as e:
-    logger.error(f"Ошибка при создании триггера: {e}")
+# try:
+#     create_triggers_db()
+#     logger.info("Триггер update_existing_sleep_time создан")
+# except sqlite3.OperationalError as e:
+#     logger.error(f"Ошибка при создании триггера: {e}")
 
 
 # Настройка всех обработчиков

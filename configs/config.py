@@ -12,7 +12,8 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 OPENCAGE_API_KEY = os.getenv('OPENCAGE_API_KEY')
 WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
 WEATHER_BASE_URL = os.getenv('WEATHER_BASE_URL')
-DATABASE_URL = os.getenv('DATABASE_UL')
+DATABASESL_URL = os.getenv('DATABASESL_URL')
+DATABASEPG_URL = os.getenv('DATABASEPG_URL')
 
 path = "configs/logging.json" if os.path.basename(os.path.abspath('./')) == "telegram_dream_analyst" \
     else "../configs/logging.json"
