@@ -24,7 +24,7 @@ from db.modify_tables import save_user_city, save_phone_number, \
     save_wake_time_records_db, save_sleep_time_records_db, get_wake_time_null, get_sleep_record_last_db
 from configs.states import UserStates, user_states
 from utils.utils import is_valid_user
-from utils.wether_tips import get_sleep_advice_based_on_weather, get_weather
+from utils.weather_tips import get_sleep_advice_based_on_weather, get_weather
 
 logger = logging.getLogger(__name__)
 

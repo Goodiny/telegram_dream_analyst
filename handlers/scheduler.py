@@ -7,7 +7,7 @@ from pyrogram import Client
 
 from db.modify_tables import execute_query, get_all_reminders, get_all_users, get_all_users_city_name, \
     get_sleep_goal_user, get_reminder_time_db, get_sleep_time_without_wake_db, get_user_wake_time
-from utils.wether_tips import get_weather, get_sleep_advice_based_on_weather
+from utils.weather_tips import get_weather, get_sleep_advice_based_on_weather
 
 logger = logging.getLogger()
 
