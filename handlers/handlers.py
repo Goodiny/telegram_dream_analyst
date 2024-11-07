@@ -19,7 +19,7 @@ from handlers.keyboards import get_initial_keyboard, get_back_keyboard, get_remi
 from utils.location_detect import get_city_from_coordinates
 from db.modify_tables import save_user_city, save_phone_number, \
     save_mood_db, save_wake_time_user_db, delete_all_data_user_db, save_reminder_time_db, save_sleep_quality_db, \
-    save_sleep_goal_db, get_reminder_time_db, get_has_provided_location, add_user_to_db, get_city_name, \
+    save_sleep_goal_db, get_reminder_time_db, get_has_provided_location, save_user_to_db, get_city_name, \
     get_all_sleep_records, get_user_wake_time, delete_reminder_db, get_sleep_records_per_week, \
     save_wake_time_records_db, save_sleep_time_records_db, get_wake_time_null, get_sleep_record_last_db
 from configs.states import UserStates, user_states
@@ -99,7 +99,7 @@ def add_new_user(user: User):
 
     try:
         # Вставляем или обновляем информацию о пользователе в таблицу users
-        add_user_to_db(user_id, username, first_name, last_name, has_provided_location=0)
+        save_user_to_db(user_id, username, first_name, last_name, has_provided_location=0)
         logger.info(f"Пользователь {user_id} добавлен или обновлен в таблице users")
     except Exception as e:
         logger.error(f"Ошибка при добавлении пользователя {user_id} в базу данных: {e}")
@@ -425,6 +425,7 @@ def setup_handlers(app: Client):
         longitude = message.location.longitude
 
         city_name = get_city_from_coordinates(latitude, longitude)
+        logger.debug(city_name)
         if city_name:
             user_id = message.from_user.id
             save_user_city(user_id, city_name)
@@ -1008,7 +1009,6 @@ async def weather_advice(client: Client, message: Message, user: User = None):
         user = message.from_user
     try:
         is_valid_user(user)
-        add_new_user(user)
     except Exception as e:
         logger.error(f"Пользователь {user} не является валидным: {e}")
         return
@@ -1017,7 +1017,7 @@ async def weather_advice(client: Client, message: Message, user: User = None):
 
     try:
         user_city_name_record = get_city_name(user_id)
-        if user_city_name_record:
+        if user_city_name_record and user_city_name_record['city_name']:
             user_city = user_city_name_record["city_name"]
         else:
             user_city = "Moscow"  # Здесь можно использовать город пользователя или запросить его

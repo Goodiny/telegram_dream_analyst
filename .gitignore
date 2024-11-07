@@ -174,3 +174,7 @@ cython_debug/
 logging.json
 #license.txt
 Dockerfile
+requirements.txt
+docker-compose.yml
+.dockerignore
+configs/logging.json

@@ -8,7 +8,7 @@ from configs.config import WEATHER_API_KEY, WEATHER_BASE_URL
 logger = logging.getLogger(__name__)
 
 
-def get_weather(city_name: str):
+def get_weather(city_name: str = "Москва"):
     try:
         params = {
             "q": city_name,

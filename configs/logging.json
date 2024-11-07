@@ -19,7 +19,7 @@
             "class": "logging.FileHandler",
             "level": "INFO",
             "formatter": "detailed",
-            "filename": "configs/bot.log",
+            "filename": "logs/bot.log",
             "mode": "a",
             "encoding": "utf-8"
         }

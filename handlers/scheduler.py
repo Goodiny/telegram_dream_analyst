@@ -120,7 +120,7 @@ def calculate_wake_up_time(user_id: int):
     if user and user['sleep_goal'] and sleep_record and sleep_record['sleep_time']:
         sleep_goal = user['sleep_goal']
         sleep_time_str = sleep_record['sleep_time']
-        sleep_time = datetime.strptime(sleep_time_str[:-10], "%Y-%m-%dT%H:%M")
+        sleep_time = datetime.strptime(sleep_time_str[:-10], "%Y-%m-%d %H:%M")
         # Преобразовываем в datetime и плюсуем желаемую цель сна
         sleep_datetime = datetime.combine(sleep_time, sleep_time.time())
         wake_up_time = sleep_time + timedelta(hours=sleep_goal)
