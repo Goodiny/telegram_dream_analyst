@@ -11,20 +11,20 @@ from uuid import uuid4
 
 from matplotlib import pyplot as plt
 from pyrogram import Client, filters
-from pyrogram.types import Message, User, ForceReply, CallbackQuery, InputTextMessageContent, InlineQueryResultArticle, \
+from pyrogram.types import Message, User, ForceReply, CallbackQuery, \
+    InputTextMessageContent, InlineQueryResultArticle, \
     ReplyKeyboardRemove
 
 from handlers.keyboards import get_initial_keyboard, get_back_keyboard, get_reminder_menu_keyboard, \
     data_management_keyboard, main_menu_keyboard, character_keyboard, get_request_keyboard
-from utils.location_detect import get_city_from_coordinates
-from db.modify_tables import save_user_city, save_phone_number, \
+from db.db import save_user_city, save_phone_number, \
     save_mood_db, save_wake_time_user_db, delete_all_data_user_db, save_reminder_time_db, save_sleep_quality_db, \
     save_sleep_goal_db, get_reminder_time_db, get_has_provided_location, save_user_to_db, get_city_name, \
     get_all_sleep_records, get_user_wake_time, delete_reminder_db, get_sleep_records_per_week, \
     save_wake_time_records_db, save_sleep_time_records_db, get_wake_time_null, get_sleep_record_last_db
 from configs.states import UserStates, user_states
-from utils.utils import is_valid_user
-from utils.weather_tips import get_sleep_advice_based_on_weather, get_weather
+from handlers.user_valid import is_valid_user
+from handlers.weather_advice import *
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,9 @@ def add_new_user(user: User):
 
 
 def setup_handlers(app: Client):
+    """
+    Обработчики для бота
+    """
     @app.on_message(filters.command("start"))
     async def start(client: Client, message: Message):
         user = message.from_user

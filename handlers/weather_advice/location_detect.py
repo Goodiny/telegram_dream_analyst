@@ -1,9 +1,12 @@
-import json
+
 import logging.config
 
 import requests
 
-from configs.config import OPENCAGE_API_KEY
+from configs import OPENCAGE_API_KEY
+
+logger = logging.getLogger(__name__)
+
 
 # OPENCAGE_API_KEY = "47f19b58763542309908925d4357927b"
 
@@ -16,8 +19,6 @@ from configs.config import OPENCAGE_API_KEY
 #         logging.StreamHandler()  # Вывод логов в консоль
 #     ]
 # )
-
-logger = logging.getLogger(__name__)
 
 
 def get_city_from_coordinates(latitude, longitude):

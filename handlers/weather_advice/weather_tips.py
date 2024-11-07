@@ -3,12 +3,15 @@ import logging.config
 
 import requests
 
-from configs.config import WEATHER_API_KEY, WEATHER_BASE_URL
+from configs import WEATHER_API_KEY, WEATHER_BASE_URL
 
 logger = logging.getLogger(__name__)
 
 
 def get_weather(city_name: str = "Москва"):
+    '''
+
+    '''
     try:
         params = {
             "q": city_name,
@@ -39,6 +42,8 @@ def get_weather(city_name: str = "Москва"):
 
 
 def get_sleep_advice_based_on_weather(weather):
+    '''
+    '''
     advice = []
 
     # Совет по температуре

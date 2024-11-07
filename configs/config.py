@@ -22,7 +22,8 @@ POSTGRES_DATABASE = os.getenv('POSTGRES_DATABASE')
 
 print(os.path.basename('./'))
 
-path = "configs/logging.json" if os.path.basename(os.path.abspath('./')) in {"telegram_dream_analyst", 'app'} \
+path = "configs/logging.json" if os.path.basename(os.path.abspath('./')) in \
+    {"telegram_dream_analyst", 'app'} \
     else "../configs/logging.json"
 
 # Настройка логирования

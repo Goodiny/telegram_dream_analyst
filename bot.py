@@ -4,11 +4,10 @@ import logging.config
 
 from pyrogram import Client
 import sqlite3
-from configs.config import TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_BOT_TOKEN
-from handlers.handlers import setup_handlers
+from configs import TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_BOT_TOKEN
+from handlers import setup_handlers, setup_scheduler
 
-from db.modify_tables import database_initialize, create_triggers_db
-from handlers.scheduler import setup_scheduler
+from db import database_initialize
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
@@ -20,11 +19,7 @@ app = Client("sleep_tracker_bot",
              bot_token=TELEGRAM_BOT_TOKEN)
 
 # Инициализация базы данных
-try:
-    database_initialize()
-    logger.info("База данных инициализирована")
-except sqlite3.OperationalError as e:
-    logger.error(f"Ошибка при создании баззы данных: {e}")
+database_initialize()
 
 # Создание триггера update_existing_sleep_time
 # try:

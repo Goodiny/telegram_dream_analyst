@@ -1,6 +1,5 @@
-def main():
-    pass
+from . import weather_advice
+from .handlers import setup_handlers
+from .scheduler import setup_scheduler
 
-
-if __name__ == "__main__":
-    main()
+__all__ = ['weather_advice', 'setup_handlers', 'setup_scheduler']

@@ -1,6 +1,4 @@
-def main():
-    pass
+from .init import database_initialize
+from .migration import migration_sqlite_to_pg
 
-
-if __name__ == "__main__":
-    main()
+__all__ = ['database_initialize','migration_sqlite_to_pg']
