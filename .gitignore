@@ -181,6 +181,4 @@ Dockerfile
 requirements.txt
 docker-compose.yml
 .dockerignore
-configs/logging.json
-.flake8
-.pylintrc
+
