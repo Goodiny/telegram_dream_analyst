@@ -1,11 +1,7 @@
-import csv
 import io
 import logging
-import os
 import random
 
-import re
-import sqlite3
 from datetime import datetime
 from uuid import uuid4
 
@@ -15,94 +11,30 @@ from pyrogram.types import Message, User, ForceReply, CallbackQuery, \
     InputTextMessageContent, InlineQueryResultArticle, \
     ReplyKeyboardRemove
 
-from handlers.keyboards import get_initial_keyboard, get_back_keyboard, get_reminder_menu_keyboard, \
-    data_management_keyboard, main_menu_keyboard, character_keyboard, get_request_keyboard
-from db.db import save_user_city, save_phone_number, \
-    save_mood_db, save_wake_time_user_db, delete_all_data_user_db, save_reminder_time_db, save_sleep_quality_db, \
-    save_sleep_goal_db, get_reminder_time_db, get_has_provided_location, save_user_to_db, get_city_name, \
-    get_all_sleep_records, get_user_wake_time, delete_reminder_db, get_sleep_records_per_week, \
-    save_wake_time_records_db, save_sleep_time_records_db, get_wake_time_null, get_sleep_record_last_db
-from configs.states import UserStates, user_states
-from handlers.user_valid import is_valid_user
-from handlers.weather_advice import *
+from handlers.location import request_location, save_location
+from handlers.sleep_character.sleep_character import show_sleep_characteristics_menu
+from handlers.sleep_character.sleep_quality import rate_sleep
+from handlers.sleep_character.user_sleep_goal import set_sleep_goal
+from handlers.sleep_character.user_wake_time import set_wake_time
+from handlers.weather_advice import get_weather_advice
+from handlers.data_management import delete_my_data, export_data, show_user_data_management_menu
+from handlers.keyboards import (
+    get_initial_keyboard, get_back_keyboard, main_menu_keyboard, get_request_keyboard
+)
+
+from handlers.reminders import set_reminder, remove_reminder, show_reminders_menu
+
+from handlers.sleep_character.sleep_mood import log_mood
+from handlers.states import UserStates, user_states
+from handlers.user_valid import add_new_user, get_user_stats, is_valid_user, user_state_navigate
+
+from db import (
+    save_phone_number, get_has_provided_location, get_sleep_records_per_week,
+    save_wake_time_records_db, save_sleep_time_records_db, get_wake_time_null
+)
+
 
 logger = logging.getLogger(__name__)
-
-
-async def user_state_navigate(state: UserStates, client: Client, message: Message, user: User = None):
-    if user is None:
-        return  # Игнорируем сообщения без информации о пользователе
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-
-    if state == UserStates.STATE_WAITING_REMINDER_TIME:
-        await save_reminder_time(client, message, user)
-    elif state == UserStates.STATE_WAITING_SLEEP_QUALITY:
-        await save_sleep_quality(client, message, user)
-    elif state == UserStates.STATE_WAITING_SLEEP_GOAL:
-        await save_sleep_goal(client, message, user)
-    elif state == UserStates.STATE_WAITING_WAKE_TIME:
-        await save_wake_time(client, message, user)
-    elif state == UserStates.STATE_WAITING_SAVE_MOOD:
-        await save_mood(client, message, user)
-    elif state == UserStates.STATE_WAITING_CONFIRM_DELETE:
-        await confirm_delete(client, message, user)
-    else:
-        await message.reply_text("Произошла ошибка. Пожалуйста, начните заново.",
-                                 reply_markup=get_back_keyboard())
-        user_states[user_id] = UserStates.STATE_NONE
-    await message.delete()
-
-
-def get_user_stats(user_id: int):
-    try:
-        record = get_sleep_record_last_db(user_id)
-        if record:
-            # sleep_time = record['sleep_time']
-            sleep_time = datetime.fromisoformat(record['sleep_time'])
-            wake_time = record['wake_time']
-            if wake_time:
-                wake_time = datetime.fromisoformat(wake_time)
-                duration = wake_time - sleep_time
-                response = (f"🛌 Ваша последняя запись сна:\nС {sleep_time.strftime('%Y-%m-%d %H:%M')} до "
-                            f"{wake_time.strftime('%Y-%m-%d %H:%M')} — {duration}")
-            else:
-                response = f"🛌 Ваша текущая запись сна:\nС {sleep_time.strftime('%Y-%m-%d %H:%M')} — Ещё не проснулись"
-            logger.info(f"Пользователь {user_id} запросил статистику сна")
-            return response
-        else:
-            logger.info(f"Пользователь {user_id} запросил статистику сна, но нет записей")
-            return
-    except Exception as e:
-        logger.error(f"Ошибка при получении статистики сна для пользователя {user_id}: {e}")
-        return
-
-
-def add_new_user(user: User):
-    if user is None:
-        return  # Игнорируем сообщения без информации о пользователе
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-    username = user.username
-    first_name = user.first_name
-    last_name = user.last_name
-
-    try:
-        # Вставляем или обновляем информацию о пользователе в таблицу users
-        save_user_to_db(user_id, username, first_name, last_name, has_provided_location=0)
-        logger.info(f"Пользователь {user_id} добавлен или обновлен в таблице users")
-    except Exception as e:
-        logger.error(f"Ошибка при добавлении пользователя {user_id} в базу данных: {e}")
 
 
 def setup_handlers(app: Client):
@@ -260,7 +192,7 @@ def setup_handlers(app: Client):
         elif data == "set_wake_time":
             await set_wake_time(client, message, user)
         elif data == "weather":
-            await weather_advice(client, message, user)
+            await get_weather_advice(client, message, user)
         elif data == "rate_sleep":
             await rate_sleep(client, message, user)
         elif data == "delete_data":
@@ -424,23 +356,11 @@ def setup_handlers(app: Client):
 
     @app.on_message(filters.location)
     async def handle_location(client: Client, message: Message):
-        latitude = message.location.latitude
-        longitude = message.location.longitude
-
-        city_name = get_city_from_coordinates(latitude, longitude)
-        logger.debug(city_name)
-        if city_name:
-            user_id = message.from_user.id
-            save_user_city(user_id, city_name)
-            await message.reply_text(f"Ваш город: {city_name}. Спасибо!", reply_markup=get_initial_keyboard())
-        else:
-            await message.reply_text("Извините, не удалось определить ваш город. Попробуйте еще раз.",
-                                     reply_markup=request_location())
-        await message.delete()
+        await save_location(client, message)
 
     @app.on_message(filters.command("weather_advice"))
     async def weather_advice_handler(client: Client, message: Message, user: User = None):
-        await weather_advice(client, message, user)
+        await get_weather_advice(client, message, user)
 
     # Команда /sleep_chart
     @app.on_message(filters.command("sleep_chart"))
@@ -634,101 +554,6 @@ async def sleep_chart(client: Client, message: Message, user: User = None):
             )
 
 
-async def set_sleep_goal(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-    user_states[user_id] = UserStates.STATE_WAITING_SLEEP_GOAL
-    await message.reply_text(
-        "Пожалуйста, введите вашу цель по продолжительности сна в часах (например, 7.5).",
-        reply_markup=ForceReply()
-    )
-
-
-async def log_mood(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-    user_states[user_id] = UserStates.STATE_WAITING_SAVE_MOOD
-    await message.reply_text(
-        "Пожалуйста, оцените ваше настроение по шкале от 1 (плохое) до 5 (отличное).",
-        reply_markup=ForceReply()
-    )
-
-
-async def rate_sleep(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-    user_states[user_id] = UserStates.STATE_WAITING_SLEEP_QUALITY
-    await message.reply_text(
-        "Пожалуйста, оцените качество вашего сна по шкале от 1 до 5.",
-        reply_markup=ForceReply()
-    )
-
-
-async def set_reminder(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-    user_states[user_id] = UserStates.STATE_WAITING_REMINDER_TIME
-    await message.reply_text(
-        "Пожалуйста, отправьте время, когда вы хотите получать напоминание "
-        "о сне, в формате HH:MM (24-часовой формат).\nНапример: 22:30",
-        reply_markup=ForceReply()
-    )
-
-
-async def remove_reminder(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-
-    try:
-        delete_reminder_db(user_id)
-        await message.reply_text(
-            "🔕 Напоминание удалено.",
-            reply_markup=get_initial_keyboard()
-        )
-        logger.info(f"Пользователь {user_id} удалил напоминание")
-    except Exception as e:
-        logger.error(f"Ошибка при удалении напоминания для пользователя {user_id}: {e}")
-        await message.reply_text(
-            "Произошла ошибка при удалении напоминания.",
-            reply_markup=get_initial_keyboard()
-        )
-
-
 async def sleep_tips(client: Client, message: Message, user: User = None):
     if user is None:
         user = message.from_user
@@ -753,147 +578,6 @@ async def sleep_tips(client: Client, message: Message, user: User = None):
     logger.info(f"Пользователь {user_id} запросил совет по сну")
 
 
-async def set_wake_time(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-    user_states[user_id] = UserStates.STATE_WAITING_WAKE_TIME
-    try:
-        wake_time_str = get_user_wake_time(user_id)
-        if wake_time_str and wake_time_str['wake_time']:
-            wake_time_dt = datetime.strptime(wake_time_str['wake_time'], "%H:%M")
-            response = (
-                f"Время пробуждения установлено на {wake_time_str['wake_time']}.\n\n"
-                f"Пожалуйста, введите время в котором вы хотели бы проснутся "
-                f"в формате HH:MM (24 часовой формат). \nНапример: 7:45"
-            )
-        else:
-            response = (
-                "Время пробуждения не установлено.\n\n"
-                "Пожалуйста, введите время в котором вы хотели бы проснутся "
-                "в формате HH:MM (24 часовой формат). \nНапример: 7:45"
-            )
-
-        await message.reply_text(
-            response,
-            reply_markup=ForceReply()
-        )
-    except Exception as e:
-        logger.error(f"Произошла ошибка при попытке пользователя {user_id} "
-                     f"установить отложенное время пробуждения: {e}")
-
-
-async def export_data(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-    try:
-        records = get_all_sleep_records(user_id)
-        if records:
-            # Создание CSV файла
-            fieldnames = records[0].keys()
-            with open(f'sleep_data_{user_id}.csv', 'w', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows([dict(record) for record in records])
-            # Отправка файла пользователю
-            await client.send_document(chat_id=user_id, document=f'sleep_data_{user_id}.csv')
-            os.remove(f'sleep_data_{user_id}.csv')  # Удаление файла после отправки
-            await message.reply_text(
-                "Данные о сне получены.",
-                reply_markup=get_initial_keyboard()
-            )
-            logger.info(f"Пользователь {user_id} экспортировал свои данные")
-        else:
-            await message.reply_text(
-                "У вас нет данных для экспорта.",
-                reply_markup=get_initial_keyboard()
-            )
-    except sqlite3.OperationalError as e:
-        logger.error(f"Ошибка при обращение к базе данных для пользователя {user_id}: {e}")
-        await message.reply_text(
-            "Произошла ошибка при обращении к базе данных.",
-            reply_markup=get_initial_keyboard()
-        )
-    except Exception as e:
-        logger.error(f"Ошибка при экспорте данных для пользователя {user_id}: {e}")
-        await message.reply_text(
-            "Произошла ошибка при экспорте данных.",
-            reply_markup=get_initial_keyboard()
-        )
-
-
-async def delete_my_data(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-    user_states[user_id] = UserStates.STATE_WAITING_CONFIRM_DELETE
-    await message.reply_text(
-        "Вы уверены, что хотите удалить все свои данные? Это действие необратимо. Напишите 'Да' для подтверждения.",
-        reply_markup=ForceReply()
-    )
-
-
-# Обработка ответа с настроением
-async def save_mood(client: Client, message: Message, user: User = None):
-    if message.reply_to_message or message.text:
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
-
-        user_id = user.id
-        mood = int(message.text.strip())
-
-        try:
-            if 1 <= mood <= 5:
-                save_mood_db(user_id, mood)
-                user_states[user_id] = UserStates.STATE_NONE
-                await message.reply_text(
-                    "Спасибо! Ваше настроение сохранено.",
-                    reply_markup=get_initial_keyboard()
-                )
-                logger.info(f"Пользователь {user_id} записал настроение: {mood}")
-            else:
-                await message.reply_text(
-                    "Пожалуйста, введите число от 1 до 5.",
-                    reply_markup=ForceReply()
-                )
-        except ValueError:
-            await message.reply_text(
-                "Пожалуйста, введите корректное число от 1 до 5.",
-                reply_markup=ForceReply()
-            )
-            logger.error(f"Произошла ошибка при записи настроения: {e}")
-        except Exception as e:
-            await message.reply_text(
-                "Произошла ошибка при записи настроения. Пожалуйста, повторите попытку",
-                reply_markup=ForceReply()
-            )
-            logger.critical(f"Произошла ошибка при записи настроения: {e}")
-
-
 async def send_main_menu(client: Client, chat_id: int):
     await client.send_message(
         chat_id=chat_id,
@@ -907,361 +591,12 @@ async def send_main_menu(client: Client, chat_id: int):
     )
 
 
-async def show_sleep_characteristics_menu(client: Client, user_id: int):
-    await client.send_message(
-        chat_id=user_id,
-        text="Выберите характеристику сна:",
-        reply_markup=character_keyboard()
-    )
-
-
-async def show_user_data_management_menu(client: Client, user_id: int):
-    await client.send_message(
-        chat_id=user_id,
-        text="Управление данными пользователя:",
-        reply_markup=data_management_keyboard()
-    )
-
-
-async def show_reminders_menu(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-
-    try:
-        reminders_record = get_reminder_time_db(user_id)
-        if reminders_record:
-            reminder_time = reminders_record['reminder_time']
-            text = f"У вас уже есть установленное напоминания: {reminder_time}."
-            keyboard = get_reminder_menu_keyboard(True)
-        else:
-            text = "У вас нет установленного напоминания."
-            keyboard = get_reminder_menu_keyboard(False)
-        await message.reply_text(text, reply_markup=ReplyKeyboardRemove())
-        await client.send_message(
-            chat_id=user_id,
-            text="Что вы хотите сделать?",
-            reply_markup=keyboard
-        )
-    except Exception as e:
-        logger.error(f'При получении данных от пользователя {user_id} произошла ошибка: {e}')
-        await message.reply_text("Произошла ошибка при получении данных, попробуйте ещё раз или вернитесь назад")
-
-
 async def request_contact(client: Client, message: Message):
     await message.reply_text(
         "Пожалуйста, поделитесь своим номером телефона, нажав на кнопку ниже.",
         reply_markup=get_request_keyboard("contact")
     )
 
-
-async def request_location(client: Client, message: Message):
-    await message.reply_text("Пожалуйста, поделитесь своим местоположением, чтобы я мог определить ваш город.",
-                             reply_markup=get_request_keyboard("location"))
-
-
-def requires_location(func):
-    async def wrapper(client: Client, message: Message, user: User = None):
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
-
-        user_id = user.id
-        try:
-            result = get_has_provided_location(user_id)
-        except Exception as e:
-            logger.error(f"Ошибка при вызове функции get_has_provided_location пользователя {user_id}: {e}")
-            return
-
-        if result is None:
-            try:
-                add_new_user(user)
-            except Exception as e:
-                logger.error(f"Ошибка при вызове функции add_new_user пользователя {user_id}: {e}")
-                return
-            result = {'has_provided_location': 0}
-
-        has_provided_location = result['has_provided_location']
-        if not has_provided_location:
-            try:
-                await message.reply_text("Пожалуйста, отправьте ваше местоположение, прежде чем продолжить.",
-                                         reply_markup=get_request_keyboard('location'))
-                return
-            except Exception as e:
-                logger.warning(f"Ошибка при вызове метода message_reply пользователя {user_id}: {e}")
-                await message.reply("Пожалуйста, отправьте ваше местоположение, прежде чем продолжить.",
-                                    reply_markup=get_request_keyboard('location'))
-                return
-        return await func(client, message, user)
-    return wrapper
-
-
-@requires_location
-async def weather_advice(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
-
-    user_id = user.id
-
-    try:
-        user_city_name_record = get_city_name(user_id)
-        if user_city_name_record and user_city_name_record['city_name']:
-            user_city = user_city_name_record["city_name"]
-        else:
-            user_city = "Moscow"  # Здесь можно использовать город пользователя или запросить его
-
-        weather = get_weather(user_city)
-
-        if weather:
-            advice = get_sleep_advice_based_on_weather(weather)
-            response = (
-                f"Погода в {weather['city']}:\n"
-                f"Температура: {weather['temperature']}°C (ощущается как {weather['feels_like']}°C)\n"
-                f"Влажность: {weather['humidity']}%\n"
-                f"Погодные условия: {weather['weather_description']}\n"
-                f"Скорость ветра: {weather['wind_speed']} м/с\n\n"
-                f"Советы по улучшению сна:\n{advice}"
-            )
-            keyboard = get_request_keyboard("weather")
-        else:
-            response = "Извините, не удалось получить данные о погоде. Попробуйте позже."
-            keyboard = get_request_keyboard()
-
-        await message.reply_text(response, reply_markup=keyboard)
-
-    except Exception as e:
-        logger.error(f"Ошибка при запросе имени города пользователя {user_id}: {e}")
-        await message.reply_text("Произошла ошибка при запросе данных о городе, попробуйте ещё раз",
-                                 reply_markup=get_request_keyboard("location")
-                                 )
-
-
-async def save_wake_time(client: Client, message: Message, user: User = None):
-    if message.reply_to_message or message.text:
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-            add_new_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
-
-        user_id = user.id
-        wake_time_str = message.text.strip()
-        # Валидация формата времени
-        if not re.match(r'^\d{1,2}:\d{2}$', wake_time_str):
-            await message.reply_text(
-                "❌ Неверный формат времени. Пожалуйста, введите время в формате HH:MM.",
-                reply_markup=ForceReply()
-            )
-            logger.warning(f"Пользователь {user_id} ввел неверный формат времени: {wake_time_str}")
-            return
-
-        try:
-            wake_time = datetime.strptime(wake_time_str, "%H:%M").time()
-            # Сохранение времени напоминания в базе данных
-            save_wake_time_user_db(user_id, wake_time_str)
-            user_states[user_id] = UserStates.STATE_NONE
-            await message.reply_text(
-                f"⏰ Время подъема установлено на {wake_time_str}.",
-                reply_markup=get_initial_keyboard()
-            )
-            logger.info(f"Пользователь {user_id} установил время подъема на {wake_time_str}")
-        except ValueError:
-            await message.reply_text(
-                "❌ Неверное время. Пожалуйста, убедитесь, что время корректно.",
-                reply_markup=ForceReply()
-            )
-            logger.warning(f"Пользователь {user_id} ввел некорректное время: {wake_time_str}")
-        except Exception as e:
-            await message.reply_text(
-                "Произошла ошибка при вводе времени. Пожалуйста, повторите попытку",
-                reply_markup=ForceReply()
-            )
-            logger.critical(f"Произошла ошибка при вводе времени подъема: {e}")
-
-
-# Обработка ответа с целью сна
-async def save_sleep_goal(client: Client, message: Message, user: User = None):
-    if message.reply_to_message or message.text:
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
-
-        add_new_user(user)
-        user_id = user.id
-        goal = float(message.text.strip())
-
-        try:
-            if 0 < goal <= 24:
-                save_sleep_goal_db(user_id, goal)
-                user_states[user_id] = UserStates.STATE_NONE
-                await message.reply_text(
-                    f"Ваша цель по продолжительности сна установлена на {goal} часов.",
-                    reply_markup=get_initial_keyboard()
-                )
-                logger.info(f"Пользователь {user_id} установил цель сна: {goal} часов")
-            else:
-                await message.reply_text(
-                    "Пожалуйста, введите число от 0 до 24.",
-                    reply_markup=ForceReply()
-                )
-        except ValueError:
-            await message.reply_text(
-                "Пожалуйста, введите корректное число.",
-                reply_markup=ForceReply()
-            )
-        except Exception as e:
-            await message.reply_text(
-                "Произошла ошибка при установки цели сна. Пожалуйста, повторите попытку",
-                reply_markup=ForceReply()
-            )
-            logger.critical(f"Произошла ошибка при установке цели сна: {e}")
-
-
-# Обработка ответа с оценкой сна
-async def save_sleep_quality(client: Client, message: Message, user: User = None):
-    if message.reply_to_message or message.text:
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
-
-        user_id = user.id
-        quality = int(message.text.strip())
-
-        try:
-            if 1 <= quality <= 5:
-                save_sleep_quality_db(user_id, quality)
-                user_states[user_id] = UserStates.STATE_NONE
-                await message.reply_text(
-                    "Спасибо! Ваша оценка сохранена.",
-                    reply_markup=get_initial_keyboard()
-                )
-                logger.info(f"Пользователь {user_id} оценил сон на {quality}")
-            else:
-                await message.reply_text(
-                    "Пожалуйста, введите число от 1 до 5.",
-                    reply_markup=ForceReply()
-                )
-                logger.warning(f"Пользоователь {user_id} ввел число не соответсвующее диапазону. Повторите попытку")
-        except ValueError:
-            await message.reply_text(
-                "Пожалуйста, введите корректное число от 1 до 5.",
-                reply_markup=ForceReply()
-            )
-            logger.error(f"Пользоователь {user_id} ввел неверно число. Повторите попытку")
-        except Exception as e:
-            await message.reply_text(
-                "Произошла ошибка при оценке сна. Пожалуйста, повторите попытку",
-                reply_markup=ForceReply()
-            )
-            logger.critical(f"Произошла ошибка при оценке сна: {e}")
-
-
-# Обработка ответа с временем напоминания
-async def save_reminder_time(client: Client, message: Message, user: User = None):
-    if message.reply_to_message:
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
-
-        add_new_user(user)
-        user_id = user.id
-        reminder_time_str = message.text.strip()
-        # Валидация формата времени
-        if not re.match(r'^\d{1,2}:\d{2}$', reminder_time_str):
-            await message.reply_text(
-                "❌ Неверный формат времени. Пожалуйста, введите время в формате HH:MM.",
-                reply_markup=ForceReply()
-            )
-            logger.warning(f"Пользователь {user_id} ввел неверный формат времени: {reminder_time_str}")
-            return
-
-        try:
-            reminder_time = datetime.strptime(reminder_time_str, "%H:%M").time()
-            # Сохранение времени напоминания в базе данных
-            save_reminder_time_db(user_id, reminder_time_str)
-            user_states[user_id] = UserStates.STATE_NONE
-            await message.reply_text(
-                f"⏰ Напоминание установлено на {reminder_time_str}.",
-                reply_markup=get_initial_keyboard()
-            )
-            logger.info(f"Пользователь {user_id} установил напоминание на {reminder_time_str}")
-        except ValueError:
-            await message.reply_text(
-                "❌ Неверное время. Пожалуйста, убедитесь, что время корректно.",
-                reply_markup=ForceReply()
-            )
-            logger.warning(f"Пользователь {user_id} ввел некорректное время: {reminder_time_str}")
-        except Exception as e:
-            await message.reply_text(
-                "Произошла ошибка при вводе времени. Пожалуйста, повторите попытку",
-                reply_markup=ForceReply()
-            )
-            logger.critical(f"Произошла ошибка при вводе времени: {e}")
-
-
-# Обработка подтверждения удаления данных
-async def confirm_delete(client: Client, message: Message, user: User = None):
-    if message.reply_to_message or message.text:
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
-
-        user_id = user.id
-
-        if message.text.strip().lower() == 'да':
-            try:
-                delete_all_data_user_db(user_id)
-                user_states[user_id] = UserStates.STATE_NONE
-                await message.reply_text(
-                    "Все ваши данные были удалены.",
-                    reply_markup=get_initial_keyboard()
-                )
-                logger.info(f"Пользователь {user_id} удалил все свои данные")
-            except Exception as e:
-                logger.error(f"Ошибка при удалении данных пользователя {user_id}: {e}")
-                await message.reply_text(
-                    "Произошла ошибка при удалении ваших данных.",
-                    reply_markup=ForceReply()
-                )
-        else:
-            await message.reply_text(
-                "Операция отменена.",
-                reply_markup=get_initial_keyboard()
-            )
 
 if __name__ == "__main__":
     pass

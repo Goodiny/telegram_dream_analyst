@@ -21,15 +21,10 @@ app = Client("sleep_tracker_bot",
 # Инициализация базы данных
 database_initialize()
 
-# Создание триггера update_existing_sleep_time
-# try:
-#     create_triggers_db()
-#     logger.info("Триггер update_existing_sleep_time создан")
-# except sqlite3.OperationalError as e:
-#     logger.error(f"Ошибка при создании триггера: {e}")
+# Инициализация триггеров для базы данных
+#create_triggers_db()
 
-
-# Настройка всех обработчиков
+# Настройка обработчиков
 setup_handlers(app)
 
 # Запуск бота

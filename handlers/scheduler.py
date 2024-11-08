@@ -12,7 +12,13 @@ logger = logging.getLogger()
 
 
 def setup_scheduler(app: Client):
+    """
+    :param app: pyrogram Client
+    """
     async def send_sleep_reminder():
+        """
+        :return:
+        """
         try:
             users = get_all_reminders()
             now = datetime.now()
@@ -35,6 +41,9 @@ def setup_scheduler(app: Client):
             logger.error(f"Ошибка в функции send_sleep_reminder: {e}")
 
     async def send_wake_up_reminder():
+        """
+        :return:
+        """
         try:
             users = get_all_reminders()
             now = datetime.now()
@@ -54,6 +63,9 @@ def setup_scheduler(app: Client):
             logger.error(f"Ошибка в функции send_wake_up_reminder: {e}")
 
     async def daily_weather_reminder():
+        """
+        :return:
+        """
         try:
             # Получаем всех пользователей и их города из базы данных
             users = get_all_users_city_name()
@@ -100,9 +112,13 @@ def calculate_weather_reminder(user_id: int):
 
 # Функция для расчета времени отхода ко сну
 def calculate_bedtime(user_id: int):
+    """
+    :param user_id: id пользователя
+    """
     user = get_sleep_goal_user(user_id)
     wake_time = get_user_wake_time(user_id)
-    if user and user['sleep_goal'] and wake_time and wake_time['wake_time']:
+    if user and user['sleep_goal'] and wake_time and \
+        wake_time['wake_time'] and wake_time['wake_time'] != "NULL":
         sleep_goal = user['sleep_goal']
         wake_time_dt = datetime.strptime(wake_time['wake_time'], "%H:%M").time()
         # Предположим, что пользователь хочет вставать в wake_time и он определен
@@ -114,6 +130,9 @@ def calculate_bedtime(user_id: int):
 
 
 def calculate_wake_up_time(user_id: int):
+    """
+    :param user_id: id пользователя
+    """
     user = get_sleep_goal_user(user_id)
     sleep_record = get_sleep_time_without_wake_db(user_id)
     if user and user['sleep_goal'] and sleep_record and sleep_record['sleep_time']:

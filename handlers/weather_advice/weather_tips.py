@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 def get_weather(city_name: str = "Москва"):
     '''
-
+    Получение погоды по названию города.
     '''
     try:
         params = {

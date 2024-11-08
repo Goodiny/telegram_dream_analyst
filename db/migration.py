@@ -50,3 +50,7 @@ def migration_sqlite_to_pg():
             logger.warning(f"Миграция не прошла так как данные не были прочитаны")
     except Exception as e:
         logger.error(f"Ошибка при миграции базы данных: {e}")
+
+
+if __name__ == '__main__':
+    migration_sqlite_to_pg()
