@@ -7,7 +7,7 @@ from pyrogram import Client
 from pyrogram.types import Message, User, ForceReply
 
 from db.db import delete_all_data_user_db, get_all_sleep_records
-from handlers.keyboards import data_management_keyboard, get_initial_keyboard
+from handlers.keyboards import data_management_keyboard, get_back_keyboard
 from handlers.states import UserStates, user_states
 from handlers.user_valid import is_valid_user
 
@@ -39,25 +39,25 @@ async def export_data(client: Client, message: Message, user: User = None):
             os.remove(f'sleep_data_{user_id}.csv')  # Удаление файла после отправки
             await message.reply_text(
                 "Данные о сне получены.",
-                reply_markup=get_initial_keyboard()
+                reply_markup=get_back_keyboard()
             )
             logger.info(f"Пользователь {user_id} экспортировал свои данные")
         else:
             await message.reply_text(
                 "У вас нет данных для экспорта.",
-                reply_markup=get_initial_keyboard()
+                reply_markup=get_back_keyboard()
             )
     except psycopg2.OperationalError as e:
         logger.error(f"Ошибка при обращение к базе данных для пользователя {user_id}: {e}")
         await message.reply_text(
             "Произошла ошибка при обращении к базе данных.",
-            reply_markup=get_initial_keyboard()
+            reply_markup=get_back_keyboard()
         )
     except Exception as e:
         logger.error(f"Ошибка при экспорте данных для пользователя {user_id}: {e}")
         await message.reply_text(
             "Произошла ошибка при экспорте данных.",
-            reply_markup=get_initial_keyboard()
+            reply_markup=get_back_keyboard()
         )
 
 
@@ -105,7 +105,7 @@ async def confirm_delete(client: Client, message: Message, user: User = None):
                 user_states[user_id] = UserStates.STATE_NONE
                 await message.reply_text(
                     "Все ваши данные были удалены.",
-                    reply_markup=get_initial_keyboard()
+                    reply_markup=get_back_keyboard()
                 )
                 logger.info(f"Пользователь {user_id} удалил все свои данные")
             except Exception as e:
@@ -117,5 +117,5 @@ async def confirm_delete(client: Client, message: Message, user: User = None):
         else:
             await message.reply_text(
                 "Операция отменена.",
-                reply_markup=get_initial_keyboard()
+                reply_markup=get_back_keyboard()
             )

@@ -4,7 +4,7 @@ from pyrogram import Client
 from pyrogram.types import Message, User, ForceReply
 
 from db.db import save_sleep_goal_db
-from handlers.keyboards import get_initial_keyboard
+from handlers.keyboards import get_back_keyboard
 from handlers.states import UserStates, user_states
 from handlers.user_valid import add_new_user, is_valid_user
 
@@ -49,7 +49,7 @@ async def save_sleep_goal(client: Client, message: Message, user: User = None):
                 user_states[user_id] = UserStates.STATE_NONE
                 await message.reply_text(
                     f"Ваша цель по продолжительности сна установлена на {goal} часов.",
-                    reply_markup=get_initial_keyboard()
+                    reply_markup=get_back_keyboard()
                 )
                 logger.info(f"Пользователь {user_id} установил цель сна: {goal} часов")
             else:

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import logging
 import random
@@ -11,7 +13,8 @@ from pyrogram.types import Message, User, ForceReply, CallbackQuery, \
     InputTextMessageContent, InlineQueryResultArticle, \
     ReplyKeyboardRemove
 
-from handlers.location import request_location, save_location
+
+from handlers.requests import save_contact, request_location, save_location, request_contact
 from handlers.sleep_character.sleep_character import show_sleep_characteristics_menu
 from handlers.sleep_character.sleep_quality import rate_sleep
 from handlers.sleep_character.user_sleep_goal import set_sleep_goal
@@ -29,7 +32,7 @@ from handlers.states import UserStates, user_states
 from handlers.user_valid import add_new_user, get_user_stats, is_valid_user, user_state_navigate
 
 from db import (
-    save_phone_number, get_has_provided_location, get_sleep_records_per_week,
+    get_has_provided_location, get_sleep_records_per_week,
     save_wake_time_records_db, save_sleep_time_records_db, get_wake_time_null
 )
 
@@ -39,8 +42,12 @@ logger = logging.getLogger(__name__)
 
 def setup_handlers(app: Client):
     """
-    Обработчики для бота
+
+    :param app: Client
+    :return:
     """
+    message_ids: list[int] = []
+
     @app.on_message(filters.command("start"))
     async def start(client: Client, message: Message):
         user = message.from_user
@@ -53,8 +60,9 @@ def setup_handlers(app: Client):
             logger.error(f"Ошибка при инициализации пользователя {user.id}: {e}")
         finally:
             if result is None or not result['has_provided_location']:
-                await message.reply_text("Пожалуйста, отправьте ваше местоположение, чтобы начать пользоваться ботом.",
-                                         reply_markup=get_request_keyboard('location_only'))
+                await message.reply_text(
+                    "Пожалуйста, отправьте ваше местоположение, чтобы начать пользоваться ботом.",
+                    reply_markup=get_request_keyboard('location_only'))
             else:
                 await message.reply_text(
                     "Вы уже предоставили свою локацию.\n\n👋 Привет! Я бот для отслеживания сна.\n\n"
@@ -64,7 +72,7 @@ def setup_handlers(app: Client):
 
     # Обработка нажатий кнопок
     @app.on_message(filters.text & ~filters.regex(r'^/'))
-    async def handle_button_presses(client, message: Message):
+    async def handle_button_presses(client: Client, message: Message):
         user = message.from_user
         try:
             is_valid_user(user)
@@ -103,27 +111,28 @@ def setup_handlers(app: Client):
         elif text == "ℹ️ Информация":
             await message.reply_text("Это информация о боте.")
         elif text in {"← Вернуться", "🔙 Назад", "← Назад"}:
+            if message_ids:
+                await client.delete_messages(message.chat.id, message_ids)
+            await remove_main_menu(client, message.chat.id)
             await message.reply_text(
                 "Вы вернулись назад. Выберите действие:",
-                reply_markup=get_initial_keyboard()
+                reply_markup=main_menu_keyboard()
             )
         else:
             # Если сообщение является ответом на ForceReply, обрабатываем его соответствующим образом
             if message.reply_to_message:
 
+                logger.debug("ForceReply on button presses")
+
                 if user_id not in user_states or user_states[user.id] == UserStates.STATE_NONE:
-                    logger.debug("Message_Reply without UserStates")
-                    await message.reply_text("Пожалуйста, используйте соответствующую команду для начала.",
-                                             reply_markup=get_back_keyboard())
-                    await message.delete()
+
                     await send_main_menu(client, user_id)
-                    return
+                    # await message.reply_text("Пожалуйста, используйте соответствующую команду для начала.",
+                    #                          reply_markup=main_menu_keyboard())
+                    await message.delete()
 
                 # Обработка ответов на запросы, например, set_reminder, save_reminder_time и т.д.
                 elif user_id in user_states and user_states[user.id] != UserStates.STATE_NONE:
-                    logger.debug("Message_Reply on UserStates")
-                    await message.reply_text("Пожалуйста, ответьте на предыдущий вопрос.", reply_markup=ForceReply())
-
                     state = user_states[user_id]
 
                     await user_state_navigate(state, client, message, user)
@@ -134,7 +143,6 @@ def setup_handlers(app: Client):
 
                     await user_state_navigate(state, client, message, user)
 
-                    # message.reply_text("Пожалуйста, ответьте на предыдущий вопрос.", reply_markup=ForceReply())
                 # Неизвестная команда
                 else:
                     await message.reply_text(
@@ -160,6 +168,9 @@ def setup_handlers(app: Client):
 
         message = callback_query.message
         data = callback_query.data
+
+        await message.delete()
+
         if data == "sleep":
             # Вызываем функцию sleep_time
             await sleep_time(client, message, user)
@@ -170,11 +181,11 @@ def setup_handlers(app: Client):
             # Вызываем функцию sleep_stats
             await sleep_stats(client, message, user)
         elif data == "reminders":
-            await show_reminders_menu(client, message, user)
+            message_ids.append(await show_reminders_menu(client, message, user))
         elif data == "set_reminder":
-            await set_reminder(client, message, user)
+            message_ids.append(await set_reminder(client, message, user))
         elif data == "reset_reminder":
-            await remove_reminder(client, message, user)
+            message_ids.append(await remove_reminder(client, message, user))
         elif data == "request_contact":
             await request_contact(client, message)
         elif data == "sleep_chart":
@@ -200,9 +211,12 @@ def setup_handlers(app: Client):
         elif data == "save_data":
             await export_data(client, message, user)
         elif data == "back_to_menu":
-            await callback_query.message.reply_text("Вы вернулись.",
-                                                    reply_markup=get_initial_keyboard())
-            await send_main_menu(client, message.chat.id)
+            if message_ids:
+                await client.delete_messages(message.chat.id, message_ids)
+
+            await message.reply("Вы вернулись.", reply_markup=main_menu_keyboard())
+
+            # await send_main_menu(client, message.chat.id)
         # Уведомляем Telegram, что колбэк обработан
         await message.edit_reply_markup(reply_markup=None)
         await callback_query.answer()
@@ -293,7 +307,7 @@ def setup_handlers(app: Client):
 
     # Команда /rate_sleep
     @app.on_message(filters.command("rate_sleep"))
-    async def rate_sleep_hanlder(client: Client, message: Message, user: User = None):
+    async def rate_sleep_handler(client: Client, message: Message, user: User = None):
         await rate_sleep(client, message, user)
 
     @app.on_message(filters.command("set_wake_time"))
@@ -307,51 +321,17 @@ def setup_handlers(app: Client):
 
     # Команда /get_phone
     @app.on_message(filters.command("get_phone"))
-    async def get_phone_handler(client: Client, messsage: Message):
-        await request_contact(client, messsage)
+    async def get_phone_handler(client: Client, message: Message):
+        await request_contact(client, message)
 
     # Обработка контакта
     @app.on_message(filters.contact)
-    async def save_contact(client: Client, message: Message, user: User = None):
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
-
-        add_new_user(user)
-        user_id = user.id
-        contact = message.contact
-        phone_number = contact.phone_number
-        contact_user_id = contact.user_id  # ID пользователя, который отправил контакт
-
-        if contact_user_id == user_id:
-            # Сохранение номера телефона в базе данных
-            try:
-                save_phone_number(user_id, phone_number)
-                await message.reply_text(
-                    "📞 Спасибо! Ваш номер телефона сохранен.",
-                    reply_markup=get_initial_keyboard()
-                )
-                logger.info(f"Пользователь {user_id} поделился номером телефона: {phone_number}")
-            except Exception as e:
-                logger.error(f"Ошибка при сохранении номера телефона для пользователя {user_id}: {e}")
-                await message.reply_text(
-                    "Произошла ошибка при сохранении вашего номера телефона.",
-                    reply_markup=get_initial_keyboard()
-                )
-        else:
-            await message.reply_text(
-                "Пожалуйста, отправьте свой собственный контакт.",
-                reply_markup=get_initial_keyboard()
-            )
-            logger.warning(f"Пользователь {user_id} попытался отправить чужой контакт.")
+    async def save_contact_handler(client: Client, message: Message, user: User = None):
+        await save_contact(client, message, user)
 
     # Функция для запроса локации у пользователя
     @app.on_message(filters.command("send_location"))
-    async def send_location_handler(client: Client, message: Message):
+    async def send_location_handler(client: Client, message: Message, user: User = None):
         await request_location(client, message)
 
     @app.on_message(filters.location)
@@ -361,11 +341,6 @@ def setup_handlers(app: Client):
     @app.on_message(filters.command("weather_advice"))
     async def weather_advice_handler(client: Client, message: Message, user: User = None):
         await get_weather_advice(client, message, user)
-
-    # Команда /sleep_chart
-    @app.on_message(filters.command("sleep_chart"))
-    async def sleep_chart_handler(client: Client, message: Message, user: User = None):
-        await sleep_chart()
 
     # Команда /sleep_tips
     @app.on_message(filters.command("sleep_tips"))
@@ -417,7 +392,7 @@ async def sleep_time(client: Client, message: Message, user: User = None):
             await message.reply_text(
                 "❗️ Запись о времени сна уже отмечена. "
                 "Используйте /wake, для пробуждения.",
-                reply_markup=get_initial_keyboard()
+                reply_markup=get_back_keyboard()
             )
             logger.warning(
                 f"Пользователь {user_id} попытался повторно отметить запись сна без записи пробуждения.")
@@ -426,14 +401,14 @@ async def sleep_time(client: Client, message: Message, user: User = None):
         save_sleep_time_records_db(user_id, sleep_time_dt.isoformat(sep=' '))
         await message.reply_text(
             f"🌙 Время отхода ко сну отмечено: {sleep_time_dt.strftime('%Y-%m-%d %H:%M:%S')}",
-            reply_markup=get_initial_keyboard()
+            reply_markup=get_back_keyboard()
         )
         logger.info(f"Пользователь {user_id} отметил время сна: {sleep_time_dt}")
     except Exception as e:
         logger.error(f"Ошибка при записи времени сна для пользователя {user_id}: {e}")
         await message.reply_text(
             "Произошла ошибка при сохранении времени сна.",
-            reply_markup=get_initial_keyboard()
+            reply_markup=get_back_keyboard()
         )
 
 
@@ -455,20 +430,20 @@ async def wake_time(client: Client, message: Message, user: User = None):
             await message.reply_text(
                 "❗️ Нет записи о времени сна или уже отмечено пробуждение. "
                 "Используйте /sleep, чтобы начать новую запись.",
-                reply_markup=get_initial_keyboard()
+                reply_markup=get_back_keyboard()
             )
             logger.warning(f"Пользователь {user_id} попытался отметить пробуждение без активной записи сна.")
             return
         await message.reply_text(
             f"☀️ Время пробуждения отмечено: {wake_time.strftime('%Y-%m-%d %H:%M:%S')}",
-            reply_markup=get_initial_keyboard()
+            reply_markup=get_back_keyboard()
         )
         logger.info(f"Пользователь {user_id} отметил время пробуждения: {wake_time}")
     except Exception as e:
         logger.error(f"Ошибка при записи времени пробуждения для пользователя {user_id}: {e}")
         await message.reply_text(
             "Произошла ошибка при сохранении времени пробуждения.",
-            reply_markup=get_initial_keyboard()
+            reply_markup=get_back_keyboard()
         )
 
 
@@ -487,18 +462,18 @@ async def sleep_stats(client: Client, message: Message, user: User = None):
         if response:
             await message.reply_text(
                 response,
-                reply_markup=get_initial_keyboard()
+                reply_markup=get_back_keyboard()
             )
         else:
             await message.reply_text(
                 "У вас пока нет записей о сне.",
-                reply_markup=get_initial_keyboard()
+                reply_markup=get_back_keyboard()
             )
     except Exception as e:
         logger.error(f"Ошибка при вызове функции get_user_stats: {e}")
         await message.reply_text(
             "Произошла ошибка при получении статистики сна.",
-            reply_markup=get_initial_keyboard()
+            reply_markup=get_back_keyboard()
         )
 
 
@@ -537,20 +512,20 @@ async def sleep_chart(client: Client, message: Message, user: User = None):
                 buf.seek(0)
                 # Отправка графика пользователю
                 await client.send_photo(chat_id=user_id, photo=buf, caption='Ваш график сна за последние 7 дней.',
-                                        reply_markup=get_initial_keyboard())
+                                        reply_markup=get_back_keyboard())
                 plt.close()
                 logger.info(f"Пользователь {user_id} запросил график сна")
             else:
                 await message.reply_text(
                     "У вас недостаточно записей для построения графика.",
-                    reply_markup=get_initial_keyboard()
+                    reply_markup=get_back_keyboard()
                 )
                 logger.info(f"Пользователь {user_id} запросил график сна, но записей недостаточно")
         except Exception as e:
             logger.error(f"Ошибка при создании графика для пользователя {user_id}: {e}")
             await message.reply_text(
                 "Произошла ошибка при создании графика.",
-                reply_markup=get_initial_keyboard()
+                reply_markup=get_back_keyboard()
             )
 
 
@@ -573,28 +548,27 @@ async def sleep_tips(client: Client, message: Message, user: User = None):
     tip = random.choice(tips)
     await message.reply_text(
         f"💡 Совет для улучшения сна:\n\n{tip}",
-        reply_markup=get_initial_keyboard()
+        reply_markup=get_back_keyboard()
     )
     logger.info(f"Пользователь {user_id} запросил совет по сну")
 
 
-async def send_main_menu(client: Client, chat_id: int):
-    await client.send_message(
+async def remove_main_menu(client: Client, chat_id: int):
+    sent_remove = await client.send_message(
         chat_id=chat_id,
-        text='Главное меню.',
+        text="Вы успешно вышли из меню.",
         reply_markup=ReplyKeyboardRemove()
     )
+    await sent_remove.delete()
+    logger.info(f"Пользователь {chat_id} вышел из меню")
+
+
+async def send_main_menu(client: Client, chat_id: int):
+    await remove_main_menu(client, chat_id)
     await client.send_message(
         chat_id=chat_id,
         text="Выберите действие:",
         reply_markup=main_menu_keyboard()
-    )
-
-
-async def request_contact(client: Client, message: Message):
-    await message.reply_text(
-        "Пожалуйста, поделитесь своим номером телефона, нажав на кнопку ниже.",
-        reply_markup=get_request_keyboard("contact")
     )
 
 

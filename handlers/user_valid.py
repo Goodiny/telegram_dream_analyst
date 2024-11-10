@@ -24,7 +24,6 @@ def is_valid_user(user: User):
     return True
 
 
-
 def get_user_stats(user_id: int):
     try:
         record = get_sleep_record_last_db(user_id)
@@ -70,13 +69,31 @@ def add_new_user(user: User):
     except Exception as e:
         logger.warning(f"Ошибка при получении информации о пользователе {user_id}: {e}")
 
-
     try:
         # Вставляем или обновляем информацию о пользователе в таблицу users
         save_user_to_db(user_id, username, first_name, last_name)
         logger.info(f"Пользователь {user_id} добавлен или обновлен в таблице users")
     except Exception as e:
         logger.error(f"Ошибка при добавлении пользователя {user_id} в базу данных: {e}")
+
+
+async def user_valid(
+        message: Message,
+        user: User,
+        text: str = "Вы не являетесь валидным пользователем, "
+                    "пожалуйста отправьте сообщение с валидного аккаунта"):
+    if user is None:
+        user = message.from_user
+    try:
+        is_valid_user(user)
+    except Exception as e:
+        logger.error(f"Пользователь {user} не является валидным: {e}")
+        message = await message.reply_text(
+            text,
+            reply_markup=get_back_keyboard())
+        return 'False', message.id
+
+    return 'True', user.id
 
 
 def requires_location(func):
@@ -121,9 +138,13 @@ def requires_location(func):
 
 async def user_state_navigate(state: UserStates, client: Client, message: Message, user: User = None):
     """
-    Переход в другое состояние пользователя
-    """
 
+    :param state: UserStates
+    :param client: Client
+    :param message: Message
+    :param user: user
+    :return:
+    """
     from handlers.data_management import confirm_delete
     from handlers.reminders import save_reminder_time
     from handlers.sleep_character.sleep_mood import save_mood
@@ -142,22 +163,25 @@ async def user_state_navigate(state: UserStates, client: Client, message: Messag
     user_id = user.id
 
     if state == UserStates.STATE_WAITING_REMINDER_TIME:
-        await save_reminder_time(client, message, user)
+        message_id = await save_reminder_time(client, message, user)
     elif state == UserStates.STATE_WAITING_SLEEP_QUALITY:
-        await save_sleep_quality(client, message, user)
+        message_id = await save_sleep_quality(client, message, user)
     elif state == UserStates.STATE_WAITING_SLEEP_GOAL:
-        await save_sleep_goal(client, message, user)
+        message_id = await save_sleep_goal(client, message, user)
     elif state == UserStates.STATE_WAITING_USER_WAKE_TIME:
-        await save_wake_time(client, message, user)
+        message_id = await save_wake_time(client, message, user)
     elif state == UserStates.STATE_WAITING_SAVE_MOOD:
-        await save_mood(client, message, user)
+        message_id = await save_mood(client, message, user)
     elif state == UserStates.STATE_WAITING_CONFIRM_DELETE:
-        await confirm_delete(client, message, user)
+        message_id = await confirm_delete(client, message, user)
     else:
-        await message.reply_text("Произошла ошибка. Пожалуйста, начните заново.",
-                                 reply_markup=get_back_keyboard())
+        message_id = await message.reply_text(
+            text="Произошла ошибка. Пожалуйста, начните заново.",
+            reply_markup=get_back_keyboard())
         user_states[user_id] = UserStates.STATE_NONE
     await message.delete()
+
+    return message_id
 
 
 if __name__ == "__main__":

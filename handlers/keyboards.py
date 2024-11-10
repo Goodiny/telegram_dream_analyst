@@ -1,7 +1,6 @@
 import logging
 
-from pyrogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-
+from pyrogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, Message
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +71,12 @@ def main_menu_keyboard():
     return keyboard
 
 
-def get_reminder_menu_keyboard(set_reminder: bool = True):
-    if set_reminder:
+def get_reminder_menu_keyboard(has_reminder: bool = True):
+    """
+    :param has_reminder: bool
+    :return: ReplyKeyboardMarkup | InlineKeyboardMarkup
+    """
+    if has_reminder:
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("⏰ Установить напоминание", callback_data="set_reminder"),
@@ -116,14 +119,17 @@ def data_management_keyboard():
     )
 
 
-def get_request_keyboard(contex: str = None):
-    if contex is not None:
-        contex = contex.lower()
-        if contex not in {"contact", "location", "location_only", "weather"}:
-            raise ValueError("Данного контекста в данной функции не предусмотренно, "
-                             "введите правильный контекст")
+def get_request_keyboard(context: str = None):
+    """
+
+    :param context: str
+    :return: ReplyKeyboardMarkup | InlineKeyboardMarkup
+    """
+    if context is not None:
+        context = context.lower()
         return_button = KeyboardButton("← Вернуться")
-        if contex == "contact":
+        return_inline_button = InlineKeyboardButton("← Вернуться", callback_data="back_to_menu")
+        if context == "contact":
             contact_button = KeyboardButton(
                 text="Отправить номер телефона",
                 request_contact=True
@@ -133,7 +139,7 @@ def get_request_keyboard(contex: str = None):
                 resize_keyboard=True,
                 one_time_keyboard=True
             )
-        elif contex == "location":
+        elif context == "location":
             location_button = KeyboardButton(
                 text="Отправить местоположение",
                 request_location=True
@@ -143,7 +149,7 @@ def get_request_keyboard(contex: str = None):
                 resize_keyboard=True,
                 one_time_keyboard=True
             )
-        elif contex == 'location_only':
+        elif context == 'location_only':
             location_button = KeyboardButton(
                 text="Отправить местоположение",
                 request_location=True
@@ -153,17 +159,24 @@ def get_request_keyboard(contex: str = None):
                 resize_keyboard=True,
                 one_time_keyboard=True
             )
-        elif contex.lower() == "weather":
+        elif context.lower() == "weather":
             reply_markup = InlineKeyboardMarkup([
-                [InlineKeyboardButton("← Назад", callback_data="back_to_menu"),
+                [return_inline_button,
                  InlineKeyboardButton("Получить совет по сну", callback_data="sleep_tips")]
             ])
-        else:
-            reply_markup = ReplyKeyboardMarkup(
-                [[return_button]],
-                resize_keyboard=True,
-                one_time_keyboard=True
+        elif context == "get_weather":
+            reply_markup = InlineKeyboardMarkup([
+                [return_inline_button,
+                 InlineKeyboardButton('🌤 Прогноз погоды', callback_data='weather')]
+
+            ])
+        elif context == "back":
+            reply_markup = InlineKeyboardMarkup(
+                [[return_inline_button]]
             )
+        else:
+            raise ValueError("Данного контекста в данной функции не предусмотренно, "
+                             "введите правильный контекст")
     else:
         reply_markup = ReplyKeyboardMarkup(
             [[KeyboardButton("🔙 Назад")]],
