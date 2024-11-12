@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from datetime import datetime
 import logging.config
+import re
 
 from pyrogram import Client
-from pyrogram.types import User, Message
+from pyrogram.types import User, Message, ForceReply
 
 from db.db import get_has_provided_location, get_sleep_record_last_db, get_user_db, save_user_to_db
 from handlers.keyboards import get_back_keyboard, get_request_keyboard
@@ -78,62 +81,97 @@ def add_new_user(user: User):
 
 
 async def user_valid(
-        message: Message,
+        message: Message | None,
         user: User,
         text: str = "Вы не являетесь валидным пользователем, "
                     "пожалуйста отправьте сообщение с валидного аккаунта"):
+    """
+    Проверка валидности пользователя
+    :param message: Message
+    :param user: User
+    :param text: str
+    :return:
+    """
     if user is None:
         user = message.from_user
     try:
         is_valid_user(user)
     except Exception as e:
         logger.error(f"Пользователь {user} не является валидным: {e}")
-        message = await message.reply_text(
+        msg = await message.reply_text(
             text,
             reply_markup=get_back_keyboard())
-        return 'False', message.id
+        return 'False', msg.id
 
     return 'True', user.id
 
 
 def requires_location(func):
     async def wrapper(client: Client, message: Message, user: User = None):
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
+        is_user, valid_id = await user_valid(message, user)
+        if is_user == 'False':
+            return valid_id
 
-        user_id = user.id
+        user_id = valid_id
         try:
             result = get_has_provided_location(user_id)
         except Exception as e:
             logger.error(f"Ошибка при вызове функции get_has_provided_location пользователя {user_id}: {e}")
-            return
+            msg = await message.reply_text(
+                "Данные о раскрытии местоположения не были получены, отправьте снова или попробуйте позже",
+                reply_markup=get_request_keyboard('location')
+            )
+            return msg.id
 
         if result is None:
             try:
                 add_new_user(user)
             except Exception as e:
-                logger.error(f"Ошибка при вызове функции add_new_user пользователя {user_id}: {e}")
-                return
+                msg = await message.reply_text(
+                    "Данный аккаунт не является валидным попробуйте снова с другим аккаунтом",
+                    reply_markup=get_request_keyboard('back')
+                )
+                return msg.id
             result = {'has_provided_location': 0}
 
         has_provided_location = result['has_provided_location']
         if not has_provided_location:
             try:
-                await message.reply_text("Пожалуйста, отправьте ваше местоположение, прежде чем продолжить.",
-                                         reply_markup=get_request_keyboard('location'))
-                return
+                msg = await message.reply_text("Пожалуйста, отправьте ваше местоположение, прежде чем продолжить.",
+                                               reply_markup=get_request_keyboard('location'))
+                return msg.id
             except Exception as e:
                 logger.warning(f"Ошибка при вызове метода message_reply пользователя {user_id}: {e}")
-                await message.reply("Пожалуйста, отправьте ваше местоположение, прежде чем продолжить.",
-                                    reply_markup=get_request_keyboard('location'))
-                return
+                msg = await message.reply("Пожалуйста, отправьте ваше местоположение, прежде чем продолжить.",
+                                          reply_markup=get_request_keyboard('location'))
+                return msg.id
         return await func(client, message, user)
     return wrapper
+
+
+async def valid_time_format(message: Message, user: User):
+    """
+
+    :param message: Message
+    :param user: User
+    :return:
+    """
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return False, valid_id
+
+    add_new_user(user)
+    user_id = valid_id
+    _time_str = message.text.strip()
+    # Валидация формата времени
+    if not re.match(r'^\d{1,2}:\d{2}$', _time_str):
+        msg = await message.reply_text(
+            "❌ Неверный формат времени. Пожалуйста, введите время в формате HH:MM.",
+            reply_markup=ForceReply()
+        )
+        logger.warning(f"Пользователь {user_id} ввел неверный формат времени: {_time_str}")
+        return False, msg.id
+    return True, (_time_str, user_id)
 
 
 async def user_state_navigate(state: UserStates, client: Client, message: Message, user: User = None):

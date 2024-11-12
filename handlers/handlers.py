@@ -11,8 +11,7 @@ from matplotlib import pyplot as plt
 from pyrogram import Client, filters
 from pyrogram.types import Message, User, ForceReply, CallbackQuery, \
     InputTextMessageContent, InlineQueryResultArticle, \
-    ReplyKeyboardRemove
-
+    ReplyKeyboardRemove, InlineQuery
 
 from handlers.requests import save_contact, request_location, save_location, request_contact
 from handlers.sleep_character.sleep_character import show_sleep_characteristics_menu
@@ -29,7 +28,7 @@ from handlers.reminders import set_reminder, remove_reminder, show_reminders_men
 
 from handlers.sleep_character.sleep_mood import log_mood
 from handlers.states import UserStates, user_states
-from handlers.user_valid import add_new_user, get_user_stats, is_valid_user, user_state_navigate
+from handlers.user_valid import add_new_user, get_user_stats, is_valid_user, user_state_navigate, user_valid
 
 from db import (
     get_has_provided_location, get_sleep_records_per_week,
@@ -113,6 +112,8 @@ def setup_handlers(app: Client):
         elif text in {"← Вернуться", "🔙 Назад", "← Назад"}:
             if message_ids:
                 await client.delete_messages(message.chat.id, message_ids)
+                logger.debug(message_ids)
+                message_ids.clear()
             await remove_main_menu(client, message.chat.id)
             await message.reply_text(
                 "Вы вернулись назад. Выберите действие:",
@@ -135,13 +136,17 @@ def setup_handlers(app: Client):
                 elif user_id in user_states and user_states[user.id] != UserStates.STATE_NONE:
                     state = user_states[user_id]
 
-                    await user_state_navigate(state, client, message, user)
+                    message_id = await user_state_navigate(state, client, message, user)
+                    if message_id:
+                        message_ids.append(message_id)
             else:
                 if user.id in user_states and user_states[user.id] != UserStates.STATE_NONE:
 
                     state = user_states[user_id]
 
-                    await user_state_navigate(state, client, message, user)
+                    message_id = await user_state_navigate(state, client, message, user)
+                    if message_id:
+                        message_ids.append(message_id)
 
                 # Неизвестная команда
                 else:
@@ -169,47 +174,78 @@ def setup_handlers(app: Client):
         message = callback_query.message
         data = callback_query.data
 
-        await message.delete()
+        # await message.delete()
 
         if data == "sleep":
-            # Вызываем функцию sleep_time
-            await sleep_time(client, message, user)
+            message_id = await sleep_time(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "wake":
-            # Вызываем функцию wake_time
-            await wake_time(client, message, user)
+            message_id = await wake_time(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "stats":
-            # Вызываем функцию sleep_stats
-            await sleep_stats(client, message, user)
-        elif data == "reminders":
-            message_ids.append(await show_reminders_menu(client, message, user))
-        elif data == "set_reminder":
-            message_ids.append(await set_reminder(client, message, user))
-        elif data == "reset_reminder":
-            message_ids.append(await remove_reminder(client, message, user))
-        elif data == "request_contact":
-            await request_contact(client, message)
+            message_id = await sleep_stats(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "sleep_chart":
-            await sleep_chart(client, message, user)
+            message_id = await sleep_chart(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
+        elif data == "reminders":
+            message_id = await show_reminders_menu(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
+        elif data == "set_reminder":
+            message_id = await set_reminder(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
+        elif data == "reset_reminder":
+            message_id = await remove_reminder(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
+        elif data == "request_contact":
+            message_ids.append(await request_contact(client, message))
         elif data == "sleep_goals":
-            await set_sleep_goal(client, message, user)
+            message_id = await set_sleep_goal(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "sleep_characteristics":
-            await show_sleep_characteristics_menu(client, user.id)
+            message_id = await show_sleep_characteristics_menu(client, user.id)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "sleep_tips":
-            await sleep_tips(client, message, user)
+            message_id = await sleep_tips(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "user_data_management":
-            await show_user_data_management_menu(client, user.id)
+            message_id = await show_user_data_management_menu(client, user.id)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "rate_mood":
-            await log_mood(client, message, user)
+            message_id = await log_mood(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "set_wake_time":
-            await set_wake_time(client, message, user)
+            message_id = await set_wake_time(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "weather":
-            await get_weather_advice(client, message, user)
+            message_id = await get_weather_advice(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "rate_sleep":
-            await rate_sleep(client, message, user)
+            message_id = await rate_sleep(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "delete_data":
-            await delete_my_data(client, message, user)
+            message_id = await delete_my_data(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "save_data":
-            await export_data(client, message, user)
+            message_id = await export_data(client, message, user)
+            if message_id:
+                message_ids.append(message_id)
         elif data == "back_to_menu":
             if message_ids:
                 await client.delete_messages(message.chat.id, message_ids)
@@ -222,15 +258,12 @@ def setup_handlers(app: Client):
         await callback_query.answer()
 
     @app.on_inline_query()
-    async def answer_inline_query(client, inline_query):
-        user = inline_query.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
+    async def answer_inline_query(client: Client, inline_query: InlineQuery):
+        is_user, valid_id = await user_valid(None, inline_query.from_user)
+        if is_user == 'False':
+            return valid_id
 
-        user_id = user.id
+        user_id = valid_id
         query = inline_query.query.strip()
         if query == "stats":
             # Получение статистики пользователя из базы данных
@@ -244,11 +277,11 @@ def setup_handlers(app: Client):
                         description="Моя статистика сна за последний сон"
                     )
                 ]
-                inline_query.answer(result)
+                await inline_query.answer(result)
             else:
-                inline_query.answer([])
+                await inline_query.answer([])
         else:
-            inline_query.answer([])
+            await inline_query.answer([])
 
         logger.info(f"Пользователь {user_id} отправил Inline-query запрос: {query}")
 
@@ -262,7 +295,6 @@ def setup_handlers(app: Client):
             logger.error(f"Пользователь {user} не является валидным: {e}")
             return
 
-        logger.debug("Handle_Force_Reply")
         user_id = user.id
         if user_id not in user_states:
             await message.reply_text("Пожалуйста, используйте соответствующую команду для начала.",
@@ -374,29 +406,24 @@ def setup_handlers(app: Client):
 
 
 async def sleep_time(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-        add_new_user(user)
-    except ValueError as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return valid_id
 
-    user_id = user.id
+    user_id = valid_id
     sleep_time_dt = datetime.now()
 
     try:
 
         if len(get_wake_time_null(user_id)) > 0:
-            await message.reply_text(
+            msg = await message.reply_text(
                 "❗️ Запись о времени сна уже отмечена. "
                 "Используйте /wake, для пробуждения.",
                 reply_markup=get_back_keyboard()
             )
             logger.warning(
                 f"Пользователь {user_id} попытался повторно отметить запись сна без записи пробуждения.")
-            return
+            return msg.id
 
         save_sleep_time_records_db(user_id, sleep_time_dt.isoformat(sep=' '))
         await message.reply_text(
@@ -406,34 +433,33 @@ async def sleep_time(client: Client, message: Message, user: User = None):
         logger.info(f"Пользователь {user_id} отметил время сна: {sleep_time_dt}")
     except Exception as e:
         logger.error(f"Ошибка при записи времени сна для пользователя {user_id}: {e}")
-        await message.reply_text(
+        msg = await message.reply_text(
             "Произошла ошибка при сохранении времени сна.",
             reply_markup=get_back_keyboard()
         )
 
+        return msg.id
+
 
 async def wake_time(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return valid_id
 
-    user_id = user.id
+    user_id = valid_id
     wake_time = datetime.now()
 
     try:
 
         if save_wake_time_records_db(user_id, wake_time.isoformat(sep=' ')).rowcount == 0:
-            await message.reply_text(
+            msg = await message.reply_text(
                 "❗️ Нет записи о времени сна или уже отмечено пробуждение. "
                 "Используйте /sleep, чтобы начать новую запись.",
                 reply_markup=get_back_keyboard()
             )
             logger.warning(f"Пользователь {user_id} попытался отметить пробуждение без активной записи сна.")
-            return
+            return msg.id
+
         await message.reply_text(
             f"☀️ Время пробуждения отмечено: {wake_time.strftime('%Y-%m-%d %H:%M:%S')}",
             reply_markup=get_back_keyboard()
@@ -441,22 +467,20 @@ async def wake_time(client: Client, message: Message, user: User = None):
         logger.info(f"Пользователь {user_id} отметил время пробуждения: {wake_time}")
     except Exception as e:
         logger.error(f"Ошибка при записи времени пробуждения для пользователя {user_id}: {e}")
-        await message.reply_text(
+        msg = await message.reply_text(
             "Произошла ошибка при сохранении времени пробуждения.",
             reply_markup=get_back_keyboard()
         )
 
+        return msg.id
+
 
 async def sleep_stats(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return valid_id
 
-    user_id = user.id
+    user_id = valid_id
     try:
         response = get_user_stats(user_id)
         if response:
@@ -465,80 +489,78 @@ async def sleep_stats(client: Client, message: Message, user: User = None):
                 reply_markup=get_back_keyboard()
             )
         else:
-            await message.reply_text(
+            msg = await message.reply_text(
                 "У вас пока нет записей о сне.",
                 reply_markup=get_back_keyboard()
             )
+            return msg.id
     except Exception as e:
         logger.error(f"Ошибка при вызове функции get_user_stats: {e}")
-        await message.reply_text(
+        msg = await message.reply_text(
             "Произошла ошибка при получении статистики сна.",
             reply_markup=get_back_keyboard()
         )
 
+        return msg.id
+
 
 async def sleep_chart(client: Client, message: Message, user: User = None):
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return valid_id
 
-        user_id = user.id
+    user_id = valid_id
 
-        try:
-            records = get_sleep_records_per_week(user_id)
-            if records:
-                durations = []
-                dates = []
-                for record in records:
-                    sleep_time = datetime.fromisoformat(record['sleep_time'])
-                    wake_time = datetime.fromisoformat(record['wake_time'])
-                    duration = (wake_time - sleep_time).total_seconds() / 3600  # В часах
-                    durations.append(duration)
-                    dates.append(sleep_time.date())
-                # Построение графика
-                plt.figure(figsize=(10, 5))
-                plt.plot(dates, durations, marker='o')
-                plt.xlabel('Дата')
-                plt.ylabel('Продолжительность сна (часы)')
-                plt.title('Ваш сон за последние 7 дней')
-                plt.grid(True)
-                # Сохранение графика в буфер
-                buf = io.BytesIO()
-                plt.savefig(buf, format='png')
-                buf.seek(0)
-                # Отправка графика пользователю
-                await client.send_photo(chat_id=user_id, photo=buf, caption='Ваш график сна за последние 7 дней.',
-                                        reply_markup=get_back_keyboard())
-                plt.close()
-                logger.info(f"Пользователь {user_id} запросил график сна")
-            else:
-                await message.reply_text(
-                    "У вас недостаточно записей для построения графика.",
-                    reply_markup=get_back_keyboard()
-                )
-                logger.info(f"Пользователь {user_id} запросил график сна, но записей недостаточно")
-        except Exception as e:
-            logger.error(f"Ошибка при создании графика для пользователя {user_id}: {e}")
-            await message.reply_text(
-                "Произошла ошибка при создании графика.",
+    try:
+        records = get_sleep_records_per_week(user_id)
+        if records:
+            durations = []
+            dates = []
+            for record in records:
+                sleep_time = datetime.fromisoformat(record['sleep_time'])
+                wake_time = datetime.fromisoformat(record['wake_time'])
+                duration = (wake_time - sleep_time).total_seconds() / 3600  # В часах
+                durations.append(duration)
+                dates.append(sleep_time.date())
+            # Построение графика
+            plt.figure(figsize=(10, 5))
+            plt.plot(dates, durations, marker='o')
+            plt.xlabel('Дата')
+            plt.ylabel('Продолжительность сна (часы)')
+            plt.title('Ваш сон за последние 7 дней')
+            plt.grid(True)
+            # Сохранение графика в буфер
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            buf.seek(0)
+            # Отправка графика пользователю
+            await client.send_photo(chat_id=user_id, photo=buf, caption='Ваш график сна за последние 7 дней.',
+                                    reply_markup=get_back_keyboard())
+            plt.close()
+            logger.info(f"Пользователь {user_id} запросил график сна")
+        else:
+            msg = await message.reply_text(
+                "У вас недостаточно записей для построения графика.",
                 reply_markup=get_back_keyboard()
             )
+            logger.info(f"Пользователь {user_id} запросил график сна, но записей недостаточно")
+            return msg.id
+    except Exception as e:
+        logger.error(f"Ошибка при создании графика для пользователя {user_id}: {e}")
+        msg = await message.reply_text(
+            "Произошла ошибка при создании графика.",
+            reply_markup=get_back_keyboard()
+        )
+
+        return msg.id
 
 
 async def sleep_tips(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return valid_id
 
-    user_id = user.id
+    user_id = valid_id
 
     tips = []
     with open("configs/sleep_tips.txt", 'r') as st:

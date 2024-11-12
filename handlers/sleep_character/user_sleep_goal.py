@@ -6,41 +6,35 @@ from pyrogram.types import Message, User, ForceReply
 from db.db import save_sleep_goal_db
 from handlers.keyboards import get_back_keyboard
 from handlers.states import UserStates, user_states
-from handlers.user_valid import add_new_user, is_valid_user
+from handlers.user_valid import add_new_user, is_valid_user, user_valid
 
 logger = logging.getLogger(__name__)
 
 
 async def set_sleep_goal(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return valid_id
 
-    user_id = user.id
+    user_id = valid_id
     user_states[user_id] = UserStates.STATE_WAITING_SLEEP_GOAL
-    await message.reply_text(
+    msg = await message.reply_text(
         "Пожалуйста, введите вашу цель по продолжительности сна в часах (например, 7.5).",
         reply_markup=ForceReply()
     )
+
+    return msg.id
 
 
 # Обработка ответа с целью сна
 async def save_sleep_goal(client: Client, message: Message, user: User = None):
     if message.reply_to_message or message.text:
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
+        is_user, valid_id = await user_valid(message, user)
+        if is_user == 'False':
+            return valid_id
 
         add_new_user(user)
-        user_id = user.id
+        user_id = valid_id
         goal = float(message.text.strip())
 
         try:
@@ -53,18 +47,22 @@ async def save_sleep_goal(client: Client, message: Message, user: User = None):
                 )
                 logger.info(f"Пользователь {user_id} установил цель сна: {goal} часов")
             else:
-                await message.reply_text(
+                msg = await message.reply_text(
                     "Пожалуйста, введите число от 0 до 24.",
                     reply_markup=ForceReply()
                 )
+                return msg.id
         except ValueError:
-            await message.reply_text(
+            msg = await message.reply_text(
                 "Пожалуйста, введите корректное число.",
                 reply_markup=ForceReply()
             )
+            return msg.id
         except Exception as e:
-            await message.reply_text(
+            msg = await message.reply_text(
                 "Произошла ошибка при установки цели сна. Пожалуйста, повторите попытку",
                 reply_markup=ForceReply()
             )
             logger.critical(f"Произошла ошибка при установке цели сна: {e}")
+
+            return msg.id

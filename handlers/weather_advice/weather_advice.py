@@ -7,23 +7,18 @@ from db.db import get_city_name
 from handlers.keyboards import get_request_keyboard
 
 from handlers.weather_advice.weather_tips import get_sleep_advice_based_on_weather, get_weather
-from handlers.user_valid import is_valid_user, requires_location
-
+from handlers.user_valid import is_valid_user, requires_location, user_valid
 
 logger = logging.getLogger(__name__)
 
 
 @requires_location
 async def get_weather_advice(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return valid_id
 
-    user_id = user.id
+    user_id = valid_id
 
     try:
         user_city_name_record = get_city_name(user_id)
@@ -45,14 +40,17 @@ async def get_weather_advice(client: Client, message: Message, user: User = None
                 f"Советы по улучшению сна:\n{advice}"
             )
             keyboard = get_request_keyboard("weather")
+            await message.reply_text(response, reply_markup=keyboard)
         else:
             response = "Извините, не удалось получить данные о погоде. Попробуйте позже."
             keyboard = get_request_keyboard()
 
-        await message.reply_text(response, reply_markup=keyboard)
+            msg = await message.reply_text(response, reply_markup=keyboard)
+            return msg.id
 
     except Exception as e:
         logger.error(f"Ошибка при запросе имени города пользователя {user_id}: {e}")
-        await message.reply_text("Произошла ошибка при запросе данных о городе, попробуйте ещё раз",
-                                 reply_markup=get_request_keyboard("location")
-                                 )
+        msg = await message.reply_text("Произошла ошибка при запросе данных о городе, попробуйте ещё раз",
+                                       reply_markup=get_request_keyboard("location")
+                                       )
+        return msg.id

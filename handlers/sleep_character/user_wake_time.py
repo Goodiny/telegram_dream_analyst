@@ -8,22 +8,17 @@ from pyrogram.types import Message, User, ForceReply
 from db.db import get_user_wake_time, save_wake_time_user_db
 from handlers.keyboards import get_back_keyboard
 from handlers.states import UserStates, user_states
-from handlers.user_valid import add_new_user, is_valid_user
-
+from handlers.user_valid import user_valid, valid_time_format
 
 logger = logging.getLogger(__name__)
 
 
 async def set_wake_time(client: Client, message: Message, user: User = None):
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return valid_id
 
-    user_id = user.id
+    user_id = valid_id
     user_states[user_id] = UserStates.STATE_WAITING_USER_WAKE_TIME
     try:
         wake_time_str = get_user_wake_time(user_id)
@@ -41,10 +36,11 @@ async def set_wake_time(client: Client, message: Message, user: User = None):
                 "в формате HH:MM (24 часовой формат). \nНапример: 7:45"
             )
 
-        await message.reply_text(
+        msg = await message.reply_text(
             response,
             reply_markup=ForceReply()
         )
+        return msg.id
     except Exception as e:
         logger.error(f"Произошла ошибка при попытке пользователя {user_id} "
                      f"установить отложенное время пробуждения: {e}")
@@ -52,25 +48,11 @@ async def set_wake_time(client: Client, message: Message, user: User = None):
 
 async def save_wake_time(client: Client, message: Message, user: User = None):
     if message.reply_to_message or message.text:
-        if user is None:
-            user = message.from_user
-        try:
-            is_valid_user(user)
-            add_new_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
+        valid_format, format_result = await valid_time_format(message, user)
+        if not valid_format:
+            return format_result
 
-        user_id = user.id
-        wake_time_str = message.text.strip()
-        # Валидация формата времени
-        if not re.match(r'^\d{1,2}:\d{2}$', wake_time_str):
-            await message.reply_text(
-                "❌ Неверный формат времени. Пожалуйста, введите время в формате HH:MM.",
-                reply_markup=ForceReply()
-            )
-            logger.warning(f"Пользователь {user_id} ввел неверный формат времени: {wake_time_str}")
-            return
+        wake_time_str, user_id = format_result
 
         try:
             wake_time = datetime.strptime(wake_time_str, "%H:%M").time()
@@ -83,14 +65,16 @@ async def save_wake_time(client: Client, message: Message, user: User = None):
             )
             logger.info(f"Пользователь {user_id} установил время подъема на {wake_time_str}")
         except ValueError:
-            await message.reply_text(
+            msg = await message.reply_text(
                 "❌ Неверное время. Пожалуйста, убедитесь, что время корректно.",
                 reply_markup=ForceReply()
             )
             logger.warning(f"Пользователь {user_id} ввел некорректное время: {wake_time_str}")
+            return msg.id
         except Exception as e:
-            await message.reply_text(
+            msg = await message.reply_text(
                 "Произошла ошибка при вводе времени. Пожалуйста, повторите попытку",
                 reply_markup=ForceReply()
             )
             logger.critical(f"Произошла ошибка при вводе времени подъема: {e}")
+            return msg.id

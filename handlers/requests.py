@@ -5,7 +5,7 @@ from pyrogram.types import Message, User
 
 from db.db import save_phone_number, save_user_city
 from handlers.keyboards import get_initial_keyboard, get_request_keyboard, main_menu_keyboard
-from handlers.user_valid import add_new_user, is_valid_user
+from handlers.user_valid import add_new_user, is_valid_user, user_valid
 from handlers.weather_advice.location_detect import get_city_from_coordinates
 
 logger = logging.getLogger(__name__)
@@ -51,10 +51,12 @@ async def request_contact(client: Client, message: Message):
     :param message: Message
     :return:
     """
-    await message.reply_text(
+    msg = await message.reply_text(
         "Пожалуйста, поделитесь своим номером телефона, нажав на кнопку ниже.",
         reply_markup=get_request_keyboard("contact")
     )
+
+    return msg.id
 
 
 async def save_contact(client: Client, message: Message, user: User = None):
@@ -65,16 +67,12 @@ async def save_contact(client: Client, message: Message, user: User = None):
     :param user: User
     :return:
     """
-    if user is None:
-        user = message.from_user
-    try:
-        is_valid_user(user)
-    except Exception as e:
-        logger.error(f"Пользователь {user} не является валидным: {e}")
-        return
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return valid_id
 
     add_new_user(user)
-    user_id = user.id
+    user_id = valid_id
     contact = message.contact
     phone_number = contact.phone_number
     contact_user_id = contact.user_id  # ID пользователя, который отправил контакт
@@ -90,13 +88,15 @@ async def save_contact(client: Client, message: Message, user: User = None):
             logger.info(f"Пользователь {user_id} поделился номером телефона: {phone_number}")
         except Exception as e:
             logger.error(f"Ошибка при сохранении номера телефона для пользователя {user_id}: {e}")
-            await message.reply_text(
+            msg = await message.reply_text(
                 "Произошла ошибка при сохранении вашего номера телефона.",
                 reply_markup=get_initial_keyboard()
             )
+            return msg.id
     else:
-        await message.reply_text(
+        msg = await message.reply_text(
             "Пожалуйста, отправьте свой собственный контакт.",
             reply_markup=get_initial_keyboard()
         )
         logger.warning(f"Пользователь {user_id} попытался отправить чужой контакт.")
+        return msg.id
