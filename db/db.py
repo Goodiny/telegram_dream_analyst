@@ -1,4 +1,6 @@
 import inspect
+from datetime import datetime
+
 import psycopg2
 
 import logging.config
@@ -11,7 +13,7 @@ logger = logging.getLogger(__name__)
 def exception_handler(func):
     def wrapper(*args, **kwargs):
         params = ', '.join([f"{a}" for a in args] + [f"{k}={v}" for k, v in kwargs.items()])
-        logger.info(f'Вызов функции {func.__name__} с параметрами {params}')
+        logger.debug(f'Вызов функции {func.__name__} с параметрами {params}')
         try:
             return func(*args, **kwargs)
         except psycopg2.OperationalError as e:
@@ -23,7 +25,6 @@ def exception_handler(func):
         except Exception as e:
             logger.error(f'Ошибка при выполнения функции {func.__name__}: {e}', exc_info=True)
             return
-            
 
     return wrapper
 
@@ -131,7 +132,16 @@ def get_all_users_city_name():
     """
     Возвращает список всех пользователей с их городом
     """
-    return execute_query_pg('SELECT id, city_name FROM public.users').fetchall()
+    return execute_query_pg('SELECT id, city_name, time_zone FROM public.users').fetchall()
+
+
+@exception_handler
+def get_user_time_zone_db(user_id: int):
+    """
+    Возвращает time_zone для пользователя с id user_id
+    """
+    return execute_query_pg('SELECT time_zone FROM public.users WHERE id = %(user_id)s',
+                             {'user_id': user_id}).fetchone()
 
 
 @exception_handler
@@ -167,7 +177,7 @@ def get_user_wake_time(user_id: int):
     Возвращает id и wake_time для пользователя с id user_id
     """
     return execute_query_pg('SELECT id, wake_time FROM public.users WHERE id = %(user_id)s', 
-                             {'user_id': user_id}).fetchone()
+                            {'user_id': user_id}).fetchone()
 
 
 @exception_handler
@@ -190,7 +200,8 @@ def save_user_to_db(user_id: int,
                     city_name: str = None, 
                     sleep_goal: float = None,
                     wake_time: str = None, 
-                    has_provided_location: int = None):
+                    has_provided_location: int = None,
+                    time_zone: str = None):
     """
     Сохраняет в базе данных пользователя с id = user_id, username, first_name, last_name, phone_number, city_name,
     sleep_goal, wake_time, has_provided_location
@@ -254,6 +265,19 @@ def save_user_city(user_id, city_name):
 
 
 @exception_handler
+def save_user_time_zone_db(user_id: int, timezone: str):
+    """
+    Сохраняет timezone для пользователя с id = user_id
+    timezone - строка с таймзоной
+    """
+    execute_query_pg('''
+        UPDATE public.users
+        SET time_zone = %(timezone)s
+        WHERE id = %(user_id)s
+    ''', {'user_id': user_id, 'timezone': timezone})
+
+
+@exception_handler
 def save_phone_number(user_id: int, phone_number: str):
     """
     Сохраняет в базе данных пользователя с id = user_id и номером телефона phone_number
@@ -290,7 +314,7 @@ def save_wake_time_user_db(user_id: int, wake_time: str):
 
 
 @exception_handler
-def save_sleep_time_records_db(user_id: int, sleep_time: str):
+def save_sleep_time_records_db(user_id: int, sleep_time: datetime):
     """
     Сохраняет sleep_time для пользователя с id = user_id
     """
@@ -301,7 +325,7 @@ def save_sleep_time_records_db(user_id: int, sleep_time: str):
 
 
 @exception_handler
-def save_wake_time_records_db(user_id: int, wake_time: str):
+def save_wake_time_records_db(user_id: int, wake_time: datetime):
     """
     Сохраняет wake_time для пользователя с id = user_id
     """
