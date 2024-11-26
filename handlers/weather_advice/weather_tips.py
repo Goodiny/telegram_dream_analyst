@@ -8,17 +8,21 @@ from configs import WEATHER_API_KEY, WEATHER_BASE_URL
 logger = logging.getLogger(__name__)
 
 
-def get_weather(city_name: str = "Москва"):
-    '''
+def get_weather(city_name: str = None):
+    """
     Получение погоды по названию города.
-    '''
+    """
+    if city_name is None:
+        city_name = 'Moscow'
+
+    params = {
+        "q": city_name,
+        "appid": WEATHER_API_KEY,
+        "units": "metric",
+        "lang": "ru"
+    }
+
     try:
-        params = {
-            "q": city_name,
-            "appid": WEATHER_API_KEY,
-            "units": "metric",
-            "lang": "ru"
-        }
         response = requests.get(WEATHER_BASE_URL, params)
         data = response.json()
 

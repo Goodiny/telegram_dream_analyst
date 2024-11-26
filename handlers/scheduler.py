@@ -4,8 +4,10 @@ from datetime import datetime, timedelta, time
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from pyrogram import Client
+from pytz import timezone
 
-from db.db import get_all_reminders, get_all_users_city_name, get_sleep_goal_user, get_reminder_time_db, get_sleep_time_without_wake_db, get_user_wake_time
+from db.db import get_all_reminders, get_all_users_city_name, get_sleep_goal_user, get_reminder_time_db, \
+    get_sleep_time_without_wake_db, get_user_wake_time, get_user_time_zone_db
 from handlers.weather_advice import get_weather, get_sleep_advice_based_on_weather
 
 logger = logging.getLogger()
@@ -15,6 +17,7 @@ def setup_scheduler(app: Client):
     """
     :param app: pyrogram Client
     """
+
     async def send_sleep_reminder():
         """
         :return:
@@ -22,9 +25,14 @@ def setup_scheduler(app: Client):
         try:
             users = get_all_reminders()
             now = datetime.now()
-            current_time = now.time()
             for user in users:
                 user_id = user['user_id']
+                if user_id:
+                    user_timezone = get_user_time_zone_db(user_id)['time_zone']
+                    if user_timezone is None:
+                        user_timezone = 'UTC'
+                    now = now.astimezone(timezone(user_timezone))
+                current_time = now.time()
                 sleep_record = get_sleep_time_without_wake_db(user_id)
                 bedtime = calculate_bedtime(user_id)
                 if (bedtime and current_time.hour == bedtime.hour
@@ -47,9 +55,14 @@ def setup_scheduler(app: Client):
         try:
             users = get_all_reminders()
             now = datetime.now()
-            current_time = now.time()
             for user in users:
                 user_id = user['user_id']
+                if user_id:
+                    user_timezone = get_user_time_zone_db(user_id)['time_zone']
+                    if user_timezone is None:
+                        user_timezone = 'UTC'
+                    now = now.astimezone(timezone(user_timezone))
+                current_time = now.time()
                 wake_up_time = calculate_wake_up_time(user_id)
                 if (wake_up_time and current_time.hour == wake_up_time.hour
                         and current_time.minute == wake_up_time.minute):
@@ -70,9 +83,12 @@ def setup_scheduler(app: Client):
             # Получаем всех пользователей и их города из базы данных
             users = get_all_users_city_name()
             now = datetime.now()
-            current_time = now.time()
             for user in users:
-                user_id, city = user
+                user_id, city, user_timezone = [user['id'], user['city_name'], user['time_zone']]
+                if user_timezone is None:
+                    user_timezone = 'UTC'
+                now.astimezone(timezone(user_timezone))
+                current_time = now.time()
                 weather = get_weather(city)
                 if weather:
                     advice = get_sleep_advice_based_on_weather(weather)
@@ -116,11 +132,12 @@ def calculate_bedtime(user_id: int):
     :param user_id: id пользователя
     """
     user = get_sleep_goal_user(user_id)
-    wake_time = get_user_wake_time(user_id)
-    if user and user['sleep_goal'] and wake_time and \
-        wake_time['wake_time'] and wake_time['wake_time'] != "NULL":
+    sleep_record = get_user_wake_time(user_id)
+    if user and user['sleep_goal'] and sleep_record and \
+            sleep_record['wake_time'] and sleep_record['wake_time'] is None:
         sleep_goal = user['sleep_goal']
-        wake_time_dt = datetime.strptime(wake_time['wake_time'], "%H:%M").time()
+        # wake_time_dt = datetime.strptime(wake_time['wake_time'], "%H:%M").time()
+        wake_time_dt = sleep_record['wake_time'].time()
         # Предположим, что пользователь хочет вставать в wake_time и он определен
         wake_up_time = datetime.combine(datetime.now(), wake_time_dt)
         bedtime = wake_up_time - timedelta(hours=sleep_goal)
@@ -137,8 +154,9 @@ def calculate_wake_up_time(user_id: int):
     sleep_record = get_sleep_time_without_wake_db(user_id)
     if user and user['sleep_goal'] and sleep_record and sleep_record['sleep_time']:
         sleep_goal = user['sleep_goal']
-        sleep_time_str = sleep_record['sleep_time']
-        sleep_time = datetime.strptime(sleep_time_str[:-10], "%Y-%m-%d %H:%M")
+        # sleep_time_str = sleep_record['sleep_time']
+        # sleep_time = datetime.strptime(sleep_time_str[:-10], "%Y-%m-%d %H:%M")
+        sleep_time = sleep_record['sleep_time']
         # Преобразовываем в datetime и плюсуем желаемую цель сна
         sleep_datetime = datetime.combine(sleep_time, sleep_time.time())
         wake_up_time = sleep_time + timedelta(hours=sleep_goal)

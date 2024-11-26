@@ -6,8 +6,11 @@ import re
 
 from pyrogram import Client
 from pyrogram.types import User, Message, ForceReply
+from pytz import timezone
+from timezonefinder import TimezoneFinder
 
-from db.db import get_has_provided_location, get_sleep_record_last_db, get_user_db, save_user_to_db
+from db.db import get_has_provided_location, get_sleep_record_last_db, get_user_db, save_user_to_db, \
+    get_user_time_zone_db, save_user_time_zone_db
 from handlers.keyboards import get_back_keyboard, get_request_keyboard
 from handlers.states import UserStates, user_states
 
@@ -31,11 +34,18 @@ def get_user_stats(user_id: int):
     try:
         record = get_sleep_record_last_db(user_id)
         if record:
-            # sleep_time = record['sleep_time']
-            sleep_time = datetime.fromisoformat(record['sleep_time'])
+            user_timezone = get_user_time_zone_db(user_id)['time_zone']
+            if user_timezone:
+                user_timezone = timezone(user_timezone)
+            else:
+                user_timezone = timezone('UTC')
+
+            # sleep_time = datetime.fromisoformat(record['sleep_time'])
+            sleep_time = record['sleep_time'].astimezone(user_timezone)
             wake_time = record['wake_time']
             if wake_time:
-                wake_time = datetime.fromisoformat(wake_time)
+                # wake_time = datetime.fromisoformat(wake_time)
+                wake_time = wake_time.astimezone(user_timezone)
                 duration = wake_time - sleep_time
                 response = (f"🛌 Ваша последняя запись сна:\nС {sleep_time.strftime('%Y-%m-%d %H:%M')} до "
                             f"{wake_time.strftime('%Y-%m-%d %H:%M')} — {duration}")
@@ -172,6 +182,56 @@ async def valid_time_format(message: Message, user: User):
         logger.warning(f"Пользователь {user_id} ввел неверный формат времени: {_time_str}")
         return False, msg.id
     return True, (_time_str, user_id)
+
+
+def get_user_time_zone(user_id: int, lng: float = None, lat: float = None):
+    """
+    Получение временного пояса пользователя.
+    :param user_id: int
+    :param lng: float
+    :param lat: float
+    :return: str
+    """
+    logger.info(f"Получение часового пояса пользователя {user_id}")
+    user_timezone = None
+    try:
+        user_timezone_db = get_user_time_zone_db(user_id)
+        logger.debug(f"User {user_id} time_zone: {user_timezone_db}")
+        if user_timezone_db is None or user_timezone_db['time_zone'] is None:  # Поиск временного пояса пользователя
+            # Поиск временного пояса пользователя по местоположению
+            if lng is not None and lat is not None:
+                logger.debug(f"Location: {lat}, {lng}")
+
+                tf = TimezoneFinder()
+                user_timezone = tf.timezone_at(lat=lat, lng=lng)
+                if user_timezone:
+                    # Сохранение местоположения в базе данных
+                    save_user_time_zone_db(user_id, timezone=user_timezone)
+                else:
+                    logger.warning(f"Не удалось определить часовой пояс пользователя {user_id} "
+                                   f"по местоположению: {lat}, {lng}")
+            else:
+                logger.warning(f"Не удалось определить местоположение пользователя {user_id}")
+                user_timezone = None
+        else:
+            user_timezone = user_timezone_db['time_zone']
+    except Exception as e:
+        logger.error(f"Ошибка при определении часового пояса пользователя {user_id}: {e}")
+    return user_timezone
+
+
+def get_local_time(dt: datetime, user_id: int):
+    """
+    Получение времени местоположения
+    :param dt: datetime
+    :param user_id: int
+    :return:
+    """
+    user_timezone = get_user_time_zone(user_id)
+    if user_timezone is None:
+        user_timezone = 'Europe/Moscow'
+    local_time = dt.astimezone(timezone(user_timezone))
+    return local_time
 
 
 async def user_state_navigate(state: UserStates, client: Client, message: Message, user: User = None):

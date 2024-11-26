@@ -12,7 +12,9 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, User, ForceReply, CallbackQuery, \
     InputTextMessageContent, InlineQueryResultArticle, \
     ReplyKeyboardRemove, InlineQuery
+from pytz import timezone
 
+from db.db import get_user_time_zone_db
 from handlers.requests import save_contact, request_location, save_location, request_contact
 from handlers.sleep_character.sleep_character import show_sleep_characteristics_menu
 from handlers.sleep_character.sleep_quality import rate_sleep
@@ -28,7 +30,8 @@ from handlers.reminders import set_reminder, remove_reminder, show_reminders_men
 
 from handlers.sleep_character.sleep_mood import log_mood
 from handlers.states import UserStates, user_states
-from handlers.user_valid import add_new_user, get_user_stats, is_valid_user, user_state_navigate, user_valid
+from handlers.user_valid import add_new_user, get_user_stats, is_valid_user, user_state_navigate, user_valid, \
+    get_local_time, get_user_time_zone
 
 from db import (
     get_has_provided_location, get_sleep_records_per_week,
@@ -50,24 +53,46 @@ def setup_handlers(app: Client):
     @app.on_message(filters.command("start"))
     async def start(client: Client, message: Message):
         user = message.from_user
+        user_id = user.id
         result = None
+        user_timezone = None
+        user_time = None
         try:
             add_new_user(user)
             # Отправка приветственного сообщения с пользовательской клавиатурой
-            result = get_has_provided_location(user.id)
+            result = get_has_provided_location(user_id)
+            user_timezone_str = get_user_time_zone_db(user_id)['time_zone']
+            if user_timezone_str is None:
+                logger.debug(f"Пользователь {user_id} не предоставил локальное время.")
+                user_timezone_str = get_user_time_zone(user_id)
+                if user_timezone_str is not None:
+                    user_timezone = timezone(user_timezone_str)
+                    user_time = get_local_time(datetime.now(), user_id)
+
+            else:
+                user_timezone = timezone(user_timezone_str)
+                user_time = get_local_time(datetime.now(), user_id)
+
         except Exception as e:
             logger.error(f"Ошибка при инициализации пользователя {user.id}: {e}")
         finally:
-            if result is None or not result['has_provided_location']:
-                await message.reply_text(
+            if result is None or not result['has_provided_location'] or user_timezone is None:
+                msg = await message.reply_text(
                     "Пожалуйста, отправьте ваше местоположение, чтобы начать пользоваться ботом.",
                     reply_markup=get_request_keyboard('location_only'))
             else:
                 await message.reply_text(
+                    f"Привет, {user.first_name}!\nВы находитесь в "
+                    f"{user_timezone} локальное время "
+                    f"{user_time.strftime('%Y-%m-%d %H:%M:%S')}."
+                )
+                msg = await message.reply_text(
                     "Вы уже предоставили свою локацию.\n\n👋 Привет! Я бот для отслеживания сна.\n\n"
                     "Выберите действие из меню ниже:",
                     reply_markup=get_initial_keyboard()
                 )
+                user_states[user_id] = UserStates.STATE_NONE
+            message_ids.append(msg.id)
 
     # Обработка нажатий кнопок
     @app.on_message(filters.text & ~filters.regex(r'^/'))
@@ -110,15 +135,15 @@ def setup_handlers(app: Client):
         elif text == "ℹ️ Информация":
             await message.reply_text("Это информация о боте.")
         elif text in {"← Вернуться", "🔙 Назад", "← Назад"}:
+            await remove_main_menu(client, message.chat.id)
             if message_ids:
                 await client.delete_messages(message.chat.id, message_ids)
-                logger.debug(message_ids)
                 message_ids.clear()
-            await remove_main_menu(client, message.chat.id)
-            await message.reply_text(
+            msg = await message.reply_text(
                 "Вы вернулись назад. Выберите действие:",
                 reply_markup=main_menu_keyboard()
             )
+            message_ids.append(msg.id)
         else:
             # Если сообщение является ответом на ForceReply, обрабатываем его соответствующим образом
             if message.reply_to_message:
@@ -174,8 +199,6 @@ def setup_handlers(app: Client):
         message = callback_query.message
         data = callback_query.data
 
-        # await message.delete()
-
         if data == "sleep":
             message_id = await sleep_time(client, message, user)
             if message_id:
@@ -195,7 +218,8 @@ def setup_handlers(app: Client):
         elif data == "reminders":
             message_id = await show_reminders_menu(client, message, user)
             if message_id:
-                message_ids.append(message_id)
+                [message_ids.append(msg_id) for msg_id in message_id] if isinstance(message_id, tuple) \
+                    else message_ids.append(message_id)
         elif data == "set_reminder":
             message_id = await set_reminder(client, message, user)
             if message_id:
@@ -255,6 +279,7 @@ def setup_handlers(app: Client):
             # await send_main_menu(client, message.chat.id)
         # Уведомляем Telegram, что колбэк обработан
         await message.edit_reply_markup(reply_markup=None)
+        await message.delete()
         await callback_query.answer()
 
     @app.on_inline_query()
@@ -305,89 +330,131 @@ def setup_handlers(app: Client):
         logger.debug("user_id in user_states")
         state = user_states[user_id]
 
-        await user_state_navigate(state, client, message, user)
+        message_id = await user_state_navigate(state, client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /sleep
     @app.on_message(filters.command("sleep"))
     async def sleep_handler(client: Client, message: Message, user: User = None):
-        await sleep_time(client, message, user)
+        message_id = await sleep_time(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /wake
     @app.on_message(filters.command("wake"))
     async def wake_time_handler(client: Client, message: Message, user: User = None):
-        await wake_time(client, message, user)
+        message_id = await wake_time(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
+
+    @app.on_message(filters.command("get_time"))
+    async def get_time_handler(client: Client, message: Message, user: User = None):
+        message_id = await get_time(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /stats
     @app.on_message(filters.command("stats"))
     async def sleep_stats_handle(client: Client, message: Message, user: User = None):
-        await sleep_stats(client, message, user)
+        message_id = await sleep_stats(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /remove_reminder
     @app.on_message(filters.command("remove_reminder"))
     async def remove_reminder_handler(client: Client, message: Message, user: User = None):
-        await remove_reminder(client, message, user)
+        message_id = await remove_reminder(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /log_mood
     @app.on_message(filters.command("log_mood"))
     async def log_mood_handler(client: Client, message: Message, user: User = None):
-        await log_mood(client, message, user)
+        message_id = await log_mood(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /set_sleep_goal
     @app.on_message(filters.command("set_sleep_goal"))
     async def set_sleep_goal_handler(client: Client, message: Message, user: User = None):
-        await set_sleep_goal(client, message, user)
+        message_id = await set_sleep_goal(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /rate_sleep
     @app.on_message(filters.command("rate_sleep"))
     async def rate_sleep_handler(client: Client, message: Message, user: User = None):
-        await rate_sleep(client, message, user)
+        message_id = await rate_sleep(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     @app.on_message(filters.command("set_wake_time"))
     async def set_wake_time_handler(client: Client, message: Message, user: User = None):
-        await set_wake_time(client, message, user)
+        message_id = await set_wake_time(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /set_reminder
     @app.on_message(filters.command("set_reminder"))
     async def set_reminder_handler(client: Client, message: Message, user: User = None):
-        await set_reminder(client, message, user)
+        message_id = await set_reminder(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /get_phone
     @app.on_message(filters.command("get_phone"))
     async def get_phone_handler(client: Client, message: Message):
-        await request_contact(client, message)
+        message_id = await request_contact(client, message)
+        if message_id:
+            message_ids.append(message_id)
 
     # Обработка контакта
     @app.on_message(filters.contact)
     async def save_contact_handler(client: Client, message: Message, user: User = None):
-        await save_contact(client, message, user)
+        message_id = await save_contact(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Функция для запроса локации у пользователя
     @app.on_message(filters.command("send_location"))
-    async def send_location_handler(client: Client, message: Message, user: User = None):
-        await request_location(client, message)
+    async def send_location_handler(client: Client, message: Message):
+        message_id = await request_location(client, message)
+        if message_id:
+            message_ids.append(message_id)
 
     @app.on_message(filters.location)
     async def handle_location(client: Client, message: Message):
-        await save_location(client, message)
+        message_id = await save_location(client, message)
+        if message_id:
+            message_ids.append(message_id)
 
     @app.on_message(filters.command("weather_advice"))
     async def weather_advice_handler(client: Client, message: Message, user: User = None):
-        await get_weather_advice(client, message, user)
+        message_id = await get_weather_advice(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /sleep_tips
     @app.on_message(filters.command("sleep_tips"))
     async def sleep_tips_handler(client: Client, message: Message, user: User = None):
-        await sleep_tips(client, message, user)
+        message_id = await sleep_tips(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /export_data
     @app.on_message(filters.command("export_data"))
     async def export_data_handler(client: Client, message: Message, user: User = None):
-        await export_data(client, message, user)
+        message_id = await export_data(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /delete_my_data
     @app.on_message(filters.command("delete_my_data"))
     async def delete_my_data_handler(client: Client, message: Message, user: User = None):
-        await delete_my_data(client, message, user)
+        message_id = await delete_my_data(client, message, user)
+        if message_id:
+            message_ids.append(message_id)
 
     # Команда /menu
     @app.on_message(filters.command("menu"))
@@ -411,7 +478,10 @@ async def sleep_time(client: Client, message: Message, user: User = None):
         return valid_id
 
     user_id = valid_id
-    sleep_time_dt = datetime.now()
+    user_timezone = get_user_time_zone_db(user_id)['time_zone']
+    if user_timezone is None:
+        user_timezone = 'UTC'
+    sleep_time_dt = datetime.now(timezone(user_timezone))
 
     try:
 
@@ -425,7 +495,7 @@ async def sleep_time(client: Client, message: Message, user: User = None):
                 f"Пользователь {user_id} попытался повторно отметить запись сна без записи пробуждения.")
             return msg.id
 
-        save_sleep_time_records_db(user_id, sleep_time_dt.isoformat(sep=' '))
+        save_sleep_time_records_db(user_id, sleep_time_dt)
         await message.reply_text(
             f"🌙 Время отхода ко сну отмечено: {sleep_time_dt.strftime('%Y-%m-%d %H:%M:%S')}",
             reply_markup=get_back_keyboard()
@@ -447,11 +517,13 @@ async def wake_time(client: Client, message: Message, user: User = None):
         return valid_id
 
     user_id = valid_id
-    wake_time = datetime.now()
+    user_timezone = get_user_time_zone_db(user_id)['time_zone']
+    if user_timezone is None:
+        user_timezone = 'UTC'
+    wake_time_dt = datetime.now(timezone(user_timezone))
 
     try:
-
-        if save_wake_time_records_db(user_id, wake_time.isoformat(sep=' ')).rowcount == 0:
+        if save_wake_time_records_db(user_id, wake_time_dt).rowcount == 0:
             msg = await message.reply_text(
                 "❗️ Нет записи о времени сна или уже отмечено пробуждение. "
                 "Используйте /sleep, чтобы начать новую запись.",
@@ -461,10 +533,10 @@ async def wake_time(client: Client, message: Message, user: User = None):
             return msg.id
 
         await message.reply_text(
-            f"☀️ Время пробуждения отмечено: {wake_time.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"☀️ Время пробуждения отмечено: {wake_time_dt.strftime('%Y-%m-%d %H:%M:%S')}",
             reply_markup=get_back_keyboard()
         )
-        logger.info(f"Пользователь {user_id} отметил время пробуждения: {wake_time}")
+        logger.info(f"Пользователь {user_id} отметил время пробуждения: {wake_time_dt}")
     except Exception as e:
         logger.error(f"Ошибка при записи времени пробуждения для пользователя {user_id}: {e}")
         msg = await message.reply_text(
@@ -473,6 +545,32 @@ async def wake_time(client: Client, message: Message, user: User = None):
         )
 
         return msg.id
+
+
+async def get_time(client: Client, message: Message, user: User = None):
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return valid_id
+
+    user_id = valid_id
+    user_timezone = 'Europe/Moscow'
+    message_time = message.date
+
+    format = '%Y-%m-%d %H:%M:%S'
+    local_time = get_local_time(message_time, user_id).strftime(format)
+    server_time = datetime.now().strftime(format)
+    if local_time:
+        msg = await message.reply_text(
+            f"🕒 Время вашего сообщения: {local_time}\nВремя чата: {message_time}\nВремя сервера: {server_time}",
+            reply_markup=get_back_keyboard()
+        )
+    else:
+        msg = await message.reply_text(
+            f"❗️ Время вашего сообщения не найдено. "
+            "Попробуйте еще раз.",
+            reply_markup=get_back_keyboard()
+        )
+    return msg.id
 
 
 async def sleep_stats(client: Client, message: Message, user: User = None):
@@ -517,8 +615,15 @@ async def sleep_chart(client: Client, message: Message, user: User = None):
             durations = []
             dates = []
             for record in records:
-                sleep_time = datetime.fromisoformat(record['sleep_time'])
-                wake_time = datetime.fromisoformat(record['wake_time'])
+                # sleep_time = datetime.fromisoformat(record['sleep_time'])
+                # wake_time = datetime.fromisoformat(record['wake_time'])
+                user_timezone_str = get_user_time_zone_db(user_id)['time_zone']
+                if user_timezone_str:
+                    user_timezone = timezone(user_timezone_str)
+                else:
+                    user_timezone = timezone('Europe/Moscow')
+                sleep_time = record['sleep_time'].astimezone(user_timezone)
+                wake_time = record['wake_time'].astimezone(user_timezone)
                 duration = (wake_time - sleep_time).total_seconds() / 3600  # В часах
                 durations.append(duration)
                 dates.append(sleep_time.date())

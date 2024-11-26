@@ -123,12 +123,14 @@ async def show_reminders_menu(client: Client, message: Message, user: User = Non
         else:
             text = "У вас нет установленного напоминания."
             keyboard = get_reminder_menu_keyboard(False)
-        msg = await message.reply_text(text, reply_markup=ReplyKeyboardRemove())
-        await client.send_message(
+        info = await message.reply_text(text, reply_markup=ReplyKeyboardRemove())
+        msg = await client.send_message(
             chat_id=user_id,
             text="Что вы хотите сделать?",
             reply_markup=keyboard
         )
+
+        return msg.id, info.id
 
     except Exception as e:
         logger.error(f'При получении данных от пользователя {user_id} произошла ошибка: {e}')
@@ -137,4 +139,4 @@ async def show_reminders_menu(client: Client, message: Message, user: User = Non
             reply_markup=ForceReply()
         )
 
-    return msg.id
+        return msg.id

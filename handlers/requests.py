@@ -1,11 +1,13 @@
 import logging.config
+from datetime import datetime
 
 from pyrogram import Client
 from pyrogram.types import Message, User
+from pytz import timezone
 
 from db.db import save_phone_number, save_user_city
-from handlers.keyboards import get_initial_keyboard, get_request_keyboard, main_menu_keyboard
-from handlers.user_valid import add_new_user, is_valid_user, user_valid
+from handlers.keyboards import get_initial_keyboard, get_request_keyboard
+from handlers.user_valid import add_new_user, user_valid, get_user_time_zone
 from handlers.weather_advice.location_detect import get_city_from_coordinates
 
 logger = logging.getLogger(__name__)
@@ -18,8 +20,9 @@ async def request_location(client: Client, message: Message):
     :param message: Message
     :return:
     """
-    await message.reply_text("Пожалуйста, поделитесь своим местоположением, чтобы я мог определить ваш город.",
-                             reply_markup=get_request_keyboard("location"))
+    msg = await message.reply_text("Пожалуйста, поделитесь своим местоположением, чтобы я мог определить ваш город.",
+                                   reply_markup=get_request_keyboard("location"))
+    return msg.id
 
 
 async def save_location(client: Client, message: Message):
@@ -29,19 +32,41 @@ async def save_location(client: Client, message: Message):
     :param message: Message
     :return:
     """
-    latitude = message.location.latitude
-    longitude = message.location.longitude
-
-    city_name = get_city_from_coordinates(latitude, longitude)
-    if city_name:
-        user_id = message.from_user.id
-        save_user_city(user_id, city_name)
-        await message.reply_text(f"Ваш город: {city_name}. Спасибо!",
-                                 reply_markup=get_request_keyboard('get_weather'))
+    if message.location:
+        logger.info("Получено местоположение.")
+        latitude = message.location.latitude
+        longitude = message.location.longitude
     else:
-        await message.reply_text("Извините, не удалось определить ваш город. Попробуйте еще раз.",
-                                 reply_markup=get_request_keyboard('location'))
-    await message.delete()
+        logger.warning("Пользователь не указал местоположение.")
+        msg = await message.reply_text(
+                "Пожалуйста, поделитесь своим местоположением, чтобы я мог определить ваш город.",
+                reply_markup=get_request_keyboard('location')
+            )
+        return msg.id
+
+    user_id = message.from_user.id
+    user_timezone = get_user_time_zone(user_id, latitude, longitude)
+    if user_timezone:
+        # Отправляем текущее время
+        user_time = datetime.now(timezone(user_timezone))
+        logger.info(f"Часовой пояс {user_id}: {user_timezone}\nТекущее время: "
+                    f"{user_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    else:
+        logger.warning(f"Не удалось определить часовой пояс пользователя {user_id}")
+
+    try:
+        city_name = get_city_from_coordinates(latitude, longitude)
+        if city_name:
+            save_user_city(user_id, city_name)
+            await message.reply_text(f"Ваш город: {city_name}. Спасибо!",
+                                     reply_markup=get_request_keyboard('get_weather'))
+        else:
+            msg = await message.reply_text("Извините, не удалось определить ваш город. Попробуйте еще раз.",
+                                           reply_markup=get_request_keyboard('location'))
+            await message.delete()
+            return msg.id
+    except Exception as e:
+        logger.error(f"Ошибка при определении города пользователя {message.from_user.id}: {e}")
 
 
 async def request_contact(client: Client, message: Message):
