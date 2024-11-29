@@ -8,7 +8,7 @@ from pytz import timezone
 
 from db.db import get_all_reminders, get_all_users_city_name, get_sleep_goal_user, get_reminder_time_db, \
     get_sleep_time_without_wake_db, get_user_wake_time, get_user_time_zone_db
-from handlers.keyboards import get_initial_keyboard
+from handlers.keyboards import get_back_keyboard
 from handlers.weather_advice import get_weather, get_sleep_advice_based_on_weather
 
 logger = logging.getLogger()
@@ -43,7 +43,7 @@ def setup_scheduler(app: Client):
                         await app.send_message(chat_id=user_id,
                                                text="🌙 Пора ложиться спать, чтобы достичь вашей цели "
                                                     "по продолжительности сна на основе времени пробуждения!",
-                                               reply_markup=get_initial_keyboard())
+                                               reply_markup=get_back_keyboard())
                         logger.info(f"Отправлено напоминание пользователю {user_id} на основе цели сна")
                     except Exception as e:
                         logger.error(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
@@ -71,7 +71,7 @@ def setup_scheduler(app: Client):
                     try:
                         await app.send_message(chat_id=user_id,
                                                text="☀️ Пора вставать, чтобы достичь назначенных целей!",
-                                               reply_markup=get_initial_keyboard())
+                                               reply_markup=get_back_keyboard())
                         logger.info(f"Отправлено напоминание пользователю {user_id} на основе цели сна")
                     except Exception as e:
                         logger.error(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
@@ -108,7 +108,7 @@ def setup_scheduler(app: Client):
                             current_time.minute == weather_time.minute:
                         try:
                             await app.send_message(chat_id=user_id, text=response,
-                                                   reply_markup=get_initial_keyboard())
+                                                   reply_markup=get_back_keyboard())
                         except Exception as e:
                             logger.error(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
         except Exception as e:
