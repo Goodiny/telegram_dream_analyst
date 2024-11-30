@@ -167,7 +167,7 @@ def get_sleep_goal_user(user_id: int):
     """
     Возвращает sleep_goal для пользователя с id user_id
     """
-    return execute_query_pg('SELECT sleep_goal FROM public.users WHERE id = %(user_id)s', 
+    return execute_query_pg('SELECT sleep_goal FROM public.users WHERE id = %(user_id)s',
                              {'user_id': user_id}).fetchone()
 
 
@@ -187,6 +187,17 @@ def get_has_provided_location(user_id: int):
     """
     return execute_query_pg('SELECT id, has_provided_location FROM public.users WHERE id = %(user_id)s', 
                              {'user_id': user_id}).fetchone()
+
+
+@exception_handler
+def get_time_zone_db(user_id: int):
+    """
+
+    :param user_id: int
+    :return:
+    """
+    return execute_query_pg('SELECT time_zone FROM public.users WHERE id = %(user_id)s',
+                            {'user_id': user_id}).fetchone()
 
 
 # SAVE
