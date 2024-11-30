@@ -189,17 +189,6 @@ def get_has_provided_location(user_id: int):
                              {'user_id': user_id}).fetchone()
 
 
-@exception_handler
-def get_time_zone_db(user_id: int):
-    """
-
-    :param user_id: int
-    :return:
-    """
-    return execute_query_pg('SELECT time_zone FROM public.users WHERE id = %(user_id)s',
-                            {'user_id': user_id}).fetchone()
-
-
 # SAVE
 
 @exception_handler
