@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta, time
+from multiprocessing.util import debug
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -88,9 +89,10 @@ def setup_scheduler(app: Client):
             now = datetime.now()
             for user in users:
                 user_id, city, user_timezone = [user['id'], user['city_name'], user['time_zone']]
-                if user_timezone is None:
-                    user_timezone = 'UTC'
-                now.astimezone(timezone(user_timezone))
+                if user_id:
+                    if user_timezone is None:
+                        user_timezone = 'UTC'
+                    now = now.astimezone(timezone(user_timezone))
                 current_time = now.time()
                 weather = get_weather(city)
                 if weather:
@@ -128,15 +130,11 @@ def calculate_weather_reminder(user_id: int):
     :return: time
     """
     reminder = get_reminder_time_db(user_id)
-    user_timezone = get_user_time_zone_db(user_id)['time_zone']
-    if user_timezone is None:
-        user_timezone = 'UTC'
     if reminder and reminder["reminder_time"]:
-        reminder_time = (datetime.strptime(reminder["reminder_time"], "%H:%M").
-                         astimezone(timezone(user_timezone)).time())
+        reminder_time = (datetime.strptime(reminder["reminder_time"], "%H:%M").time())
         return reminder_time
     else:
-        return datetime.combine(datetime.now(), time(20, 00)).astimezone(timezone(user_timezone)).time()
+        return datetime.combine(datetime.now(), time(20, 00)).time()
 
 
 # Функция для расчета времени отхода ко сну
