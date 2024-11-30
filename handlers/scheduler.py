@@ -122,28 +122,41 @@ def setup_scheduler(app: Client):
 
 
 def calculate_weather_reminder(user_id: int):
+    """
+
+    :param user_id: int
+    :return: time
+    """
     reminder = get_reminder_time_db(user_id)
+    user_timezone = get_user_time_zone_db(user_id)['time_zone']
+    if user_timezone is None:
+        user_timezone = 'UTC'
     if reminder and reminder["reminder_time"]:
-        reminder_time = datetime.strptime(reminder["reminder_time"], "%H:%M").time()
+        reminder_time = (datetime.strptime(reminder["reminder_time"], "%H:%M").
+                         astimezone(timezone(user_timezone)).time())
         return reminder_time
     else:
-        return datetime.combine(datetime.now(), time(20, 00))
+        return datetime.combine(datetime.now(), time(20, 00)).astimezone(timezone(user_timezone)).time()
 
 
 # Функция для расчета времени отхода ко сну
 def calculate_bedtime(user_id: int):
     """
     :param user_id: id пользователя
+    :return: time | None
     """
     user = get_sleep_goal_user(user_id)
+    user_timezone = get_user_time_zone_db(user_id)['time_zone']
     sleep_record = get_user_wake_time(user_id)
     if user and user['sleep_goal'] and sleep_record and \
             sleep_record['wake_time'] and sleep_record['wake_time'] is None:
+        if user_timezone is None:
+            user_timezone = 'UTC'
         sleep_goal = user['sleep_goal']
         # wake_time_dt = datetime.strptime(wake_time['wake_time'], "%H:%M").time()
-        wake_time_dt = sleep_record['wake_time'].time()
+        wake_time_dt = sleep_record['wake_time'].astimezone(timezone(user_timezone)).time()
         # Предположим, что пользователь хочет вставать в wake_time и он определен
-        wake_up_time = datetime.combine(datetime.now(), wake_time_dt)
+        wake_up_time = datetime.combine(datetime.now(timezone(user_timezone)), wake_time_dt)
         bedtime = wake_up_time - timedelta(hours=sleep_goal)
         return bedtime.time()
     else:
@@ -153,17 +166,21 @@ def calculate_bedtime(user_id: int):
 def calculate_wake_up_time(user_id: int):
     """
     :param user_id: id пользователя
+    :return: time | None
     """
     user = get_sleep_goal_user(user_id)
+    user_timezone = get_user_time_zone_db(user_id)['time_zone']
     sleep_record = get_sleep_time_without_wake_db(user_id)
     if user and user['sleep_goal'] and sleep_record and sleep_record['sleep_time']:
+        if user_timezone is None:
+            user_timezone = 'UTC'
         sleep_goal = user['sleep_goal']
         # sleep_time_str = sleep_record['sleep_time']
         # sleep_time = datetime.strptime(sleep_time_str[:-10], "%Y-%m-%d %H:%M")
-        sleep_time = sleep_record['sleep_time']
+        sleep_time_dt = sleep_record['sleep_time'].astimezone(timezone(user_timezone)).time()
         # Преобразовываем в datetime и плюсуем желаемую цель сна
-        sleep_datetime = datetime.combine(sleep_time, sleep_time.time())
-        wake_up_time = sleep_time + timedelta(hours=sleep_goal)
+        sleep_datetime = datetime.combine(datetime.now(timezone(user_timezone)), sleep_time_dt)
+        wake_up_time = sleep_datetime + timedelta(hours=sleep_goal)
         return wake_up_time.time()
     else:
         return None
