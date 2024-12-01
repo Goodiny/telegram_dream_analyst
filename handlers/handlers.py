@@ -348,9 +348,9 @@ def setup_handlers(app: Client):
         if message_id:
             message_ids.append(message_id)
 
-    @app.on_message(filters.command("get_time"))
+    @app.on_message(filters.command("get_timezone"))
     async def get_time_handler(client: Client, message: Message, user: User = None):
-        message_id = await get_time(client, message, user)
+        message_id = await get_timezone(client, message, user)
         if message_id:
             message_ids.append(message_id)
 
@@ -547,7 +547,7 @@ async def wake_time(client: Client, message: Message, user: User = None):
         return msg.id
 
 
-async def get_time(client: Client, message: Message, user: User = None):
+async def get_timezone(client: Client, message: Message, user: User = None):
     is_user, valid_id = await user_valid(message, user)
     if is_user == 'False':
         return valid_id
