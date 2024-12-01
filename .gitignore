@@ -183,3 +183,4 @@ docker-compose.yml
 .dockerignore
 
 /postgresql-driver-license.txt
+/docker-compose.yml
