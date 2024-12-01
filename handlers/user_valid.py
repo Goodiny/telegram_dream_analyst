@@ -190,34 +190,44 @@ def get_user_time_zone(user_id: int, lng: float = None, lat: float = None):
     :param user_id: int
     :param lng: float
     :param lat: float
-    :return: str
+    :return: str | None
     """
     logger.info(f"Получение часового пояса пользователя {user_id}")
-    user_timezone = None
     try:
-        user_timezone_db = get_user_time_zone_db(user_id)
-        logger.debug(f"User {user_id} time_zone: {user_timezone_db}")
-        if user_timezone_db is None or user_timezone_db['time_zone'] is None:  # Поиск временного пояса пользователя
-            # Поиск временного пояса пользователя по местоположению
-            if lng is not None and lat is not None:
-                logger.debug(f"Location: {lat}, {lng}")
-
-                tf = TimezoneFinder()
-                user_timezone = tf.timezone_at(lat=lat, lng=lng)
-                if user_timezone:
-                    # Сохранение местоположения в базе данных
-                    save_user_time_zone_db(user_id, timezone=user_timezone)
-                else:
-                    logger.warning(f"Не удалось определить часовой пояс пользователя {user_id} "
-                                   f"по местоположению: {lat}, {lng}")
-            else:
-                logger.warning(f"Не удалось определить местоположение пользователя {user_id}")
-                user_timezone = None
+        user_timezone: str = get_user_time_zone_db(user_id)['time_zone']
+        logger.debug(f"User {user_id} time_zone: {user_timezone}")
+        if lng is not None and lat is not None: # Определяем новый часовой пояс по координатам
+            logger.debug(f"Location: {lat}, {lng}")
+            tf = TimezoneFinder()
+            user_timezone_new = tf.timezone_at(lat=lat, lng=lng)
+            if user_timezone_new is None:
+                logger.warning(f"Не удалось определить часовой пояс пользователя {user_id} "
+                               f"по местоположению: {lat}, {lng}")
         else:
-            user_timezone = user_timezone_db['time_zone']
+            logger.warning(f"Не удалось определить местоположение пользователя {user_id}")
+            user_timezone_new = None
+
+        if user_timezone_new: # часовой пояс определен
+            if user_timezone is None:  # Поиск часового пояса пользователя
+                # Поиск часового пояса пользователя по местоположению
+                # Сохранение местоположения в базе данных
+                save_user_time_zone_db(user_id, timezone=user_timezone_new)
+                logger.info(f'Новый часовой пояс для пользователя {user_id} определен по координатам: {lng}, {lat}')
+            else: # часовой пояс есть у пользователя
+                if user_timezone != user_timezone_new: # обновляем часовой пояс
+                    save_user_time_zone_db(user_id, timezone=user_timezone_new)
+                    logger.info(f'Новый часовой пояс пользователя {user_id} определеный по координатам {lng}, {lat}\n'
+                                f'заменен вместо старого: {user_timezone}')
+                else: # часовой пояс не изменился
+                    logger.info(f"Часовой пояс пользователя {user_id} остался прежним: {user_timezone}")
+                    return user_timezone
+            return user_timezone_new
+        else: # новый часовой пояс не определен
+            logger.info(f"Новый часовой пояс пользователя {user_id} не был определен и остался прежним: {user_timezone}")
+            return user_timezone
     except Exception as e:
         logger.error(f"Ошибка при определении часового пояса пользователя {user_id}: {e}")
-    return user_timezone
+        return None
 
 
 def get_local_time(dt: datetime, user_id: int):
@@ -229,7 +239,7 @@ def get_local_time(dt: datetime, user_id: int):
     """
     user_timezone = get_user_time_zone(user_id)
     if user_timezone is None:
-        user_timezone = 'Europe/Moscow'
+        user_timezone = 'UTC'
     local_time = dt.astimezone(timezone(user_timezone))
     return local_time
 
