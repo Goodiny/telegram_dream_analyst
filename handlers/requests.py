@@ -5,6 +5,7 @@ from pyrogram import Client
 from pyrogram.types import Message, User
 from pytz import timezone
 
+from db import get_city_name
 from db.db import save_phone_number, save_user_city
 from handlers.keyboards import get_initial_keyboard, get_request_keyboard
 from handlers.user_valid import add_new_user, user_valid, get_user_time_zone
@@ -55,16 +56,27 @@ async def save_location(client: Client, message: Message):
         logger.warning(f"Не удалось определить часовой пояс пользователя {user_id}")
 
     try:
-        city_name = get_city_from_coordinates(latitude, longitude)
-        if city_name:
-            save_user_city(user_id, city_name)
-            await message.reply_text(f"Ваш город: {city_name}. Спасибо!",
-                                     reply_markup=get_request_keyboard('get_weather'))
+        city_name_new = get_city_from_coordinates(latitude, longitude)
+        city_name_old = get_city_name(user_id)['city_name']
+        if city_name_new:
+
+            if city_name_old is not None and city_name_old == city_name_new:
+                await message.reply_text(f"Ваш город по прежнему: {city_name_old}. Спасибо!",
+                                         reply_markup=get_request_keyboard('get_weather'))
+            else:
+                save_user_city(user_id, city_name_new)
+                await message.reply_text(f"Ваш город: {city_name_new}. Спасибо!",
+                                         reply_markup=get_request_keyboard('get_weather'))
+
         else:
-            msg = await message.reply_text("Извините, не удалось определить ваш город. Попробуйте еще раз.",
-                                           reply_markup=get_request_keyboard('location'))
-            await message.delete()
-            return msg.id
+            if city_name_old is not None:
+                await message.reply_text(f"Ваш город по прежнему: {city_name_old}. Спасибо!",
+                                         reply_markup=get_request_keyboard('get_weather'))
+            else:
+                msg = await message.reply_text("Извините, не удалось определить ваш город. Попробуйте еще раз.",
+                                               reply_markup=get_request_keyboard('location'))
+                await message.delete()
+                return msg.id
     except Exception as e:
         logger.error(f"Ошибка при определении города пользователя {message.from_user.id}: {e}")
 
