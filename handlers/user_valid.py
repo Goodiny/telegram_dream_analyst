@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
 import logging.config
 import re
+from datetime import datetime
 
 from pyrogram import Client
 from pyrogram.types import User, Message, ForceReply
@@ -13,7 +13,6 @@ from db.db import get_has_provided_location, get_sleep_record_last_db, get_user_
     get_user_time_zone_db, save_user_time_zone_db
 from handlers.keyboards import get_back_keyboard, get_request_keyboard
 from handlers.states import UserStates, user_states
-
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +27,27 @@ def is_valid_user(user: User):
         ):
         raise ValueError
     return True
+
+
+async def process_user(message: Message, user: User = None):
+    """
+    Проверяет пользователя, получает временную зону и текущее время.
+
+    :param message: Message
+    :param user: User
+    :return: Tuple (user_id, user_timezone, wake_time_dt)
+    """
+    is_user, valid_id = await user_valid(message, user)
+    if is_user == 'False':
+        return valid_id, None, None  # Возвращаем значения для обработки ошибки
+
+    user_id = valid_id
+    user_timezone = get_user_time_zone_db(user_id)['time_zone']
+    if user_timezone is None:
+        user_timezone = 'UTC'
+    current_time_dt = datetime.now(timezone(user_timezone))
+
+    return user_id, user_timezone, current_time_dt
 
 
 def get_user_stats(user_id: int):
@@ -100,7 +120,7 @@ async def user_valid(
     :param message: Message
     :param user: User
     :param text: str
-    :return:
+    :return: Tuple (str, int)
     """
     if user is None:
         user = message.from_user
@@ -184,7 +204,7 @@ async def valid_time_format(message: Message, user: User):
     return True, (_time_str, user_id)
 
 
-def get_user_time_zone(user_id: int, lng: float = None, lat: float = None):
+def get_user_time_zone(user_id: int, *, lat: float = None, lng: float = None):
     """
     Получение временного пояса пользователя.
     :param user_id: int
