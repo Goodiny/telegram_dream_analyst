@@ -3,7 +3,6 @@ import sqlite3
 
 from configs import DATABASESL_URL
 
-
 logger = logging.getLogger(__name__)
 
 

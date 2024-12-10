@@ -9,7 +9,7 @@ from pyrogram.types import Message, User, ForceReply
 from db.db import delete_all_data_user_db, get_all_sleep_records
 from handlers.keyboards import data_management_keyboard, get_back_keyboard
 from handlers.states import UserStates, user_states
-from handlers.user_valid import is_valid_user, user_valid
+from handlers.user_valid import user_valid
 
 logger = logging.getLogger(__name__)
 

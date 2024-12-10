@@ -1,11 +1,10 @@
 import inspect
+import logging.config
 from datetime import datetime
 
 import psycopg2
 
-import logging.config
 from db.execute_query import execute_query_pg
-
 
 logger = logging.getLogger(__name__)
 

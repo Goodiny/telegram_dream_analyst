@@ -1,8 +1,7 @@
-import re
-import psycopg2
-
 import logging.config
+import re
 
+import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from configs import DATABASEPG_URL, POSTGRES_USERNAME, POSTGRES_DATABASE, POSTGRES_PASSWORD, \

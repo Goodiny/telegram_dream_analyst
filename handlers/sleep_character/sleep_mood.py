@@ -6,7 +6,7 @@ from pyrogram.types import Message, User, ForceReply
 from db.db import save_mood_db
 from handlers.keyboards import get_back_keyboard
 from handlers.states import UserStates, user_states
-from handlers.user_valid import is_valid_user, user_valid
+from handlers.user_valid import user_valid
 
 logger = logging.getLogger(__name__)
 

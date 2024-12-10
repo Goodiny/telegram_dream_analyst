@@ -8,7 +8,6 @@ from handlers.keyboards import get_back_keyboard
 from handlers.states import UserStates, user_states
 from handlers.user_valid import is_valid_user
 
-
 logger = logging.getLogger(__name__)
 
 

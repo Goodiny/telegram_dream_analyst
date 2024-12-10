@@ -1,6 +1,5 @@
-from datetime import datetime
 import logging.config
-import re
+from datetime import datetime
 
 from pyrogram import Client
 from pyrogram.types import Message, User, ForceReply

@@ -5,9 +5,8 @@ from pyrogram.types import Message, User
 
 from db.db import get_city_name
 from handlers.keyboards import get_request_keyboard
-
+from handlers.user_valid import requires_location, user_valid
 from handlers.weather_advice.weather_tips import get_sleep_advice_based_on_weather, get_weather
-from handlers.user_valid import is_valid_user, requires_location, user_valid
 
 logger = logging.getLogger(__name__)
 
