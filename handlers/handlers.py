@@ -3,41 +3,36 @@ from __future__ import annotations
 import io
 import logging
 import random
-
 from datetime import datetime
 from uuid import uuid4
 
 from matplotlib import pyplot as plt
 from pyrogram import Client, filters
-from pyrogram.types import Message, User, ForceReply, CallbackQuery, \
+from pyrogram.types import Message, User, CallbackQuery, \
     InputTextMessageContent, InlineQueryResultArticle, \
     ReplyKeyboardRemove, InlineQuery
 from pytz import timezone
-
-from db.db import get_user_time_zone_db
-from handlers.requests import save_contact, request_location, save_location, request_contact
-from handlers.sleep_character.sleep_character import show_sleep_characteristics_menu
-from handlers.sleep_character.sleep_quality import rate_sleep
-from handlers.sleep_character.user_sleep_goal import set_sleep_goal
-from handlers.sleep_character.user_wake_time import set_wake_time
-from handlers.weather_advice import get_weather_advice
-from handlers.data_management import delete_my_data, export_data, show_user_data_management_menu
-from handlers.keyboards import (
-    get_initial_keyboard, get_back_keyboard, main_menu_keyboard, get_request_keyboard
-)
-
-from handlers.reminders import set_reminder, remove_reminder, show_reminders_menu
-
-from handlers.sleep_character.sleep_mood import log_mood
-from handlers.states import UserStates, user_states
-from handlers.user_valid import add_new_user, get_user_stats, is_valid_user, user_state_navigate, user_valid, \
-    get_local_time, get_user_time_zone
 
 from db import (
     get_has_provided_location, get_sleep_records_per_week,
     save_wake_time_records_db, save_sleep_time_records_db, get_wake_time_null
 )
-
+from db.db import get_user_time_zone_db
+from handlers.data_management import delete_my_data, export_data, show_user_data_management_menu
+from handlers.keyboards import (
+    get_initial_keyboard, get_back_keyboard, main_menu_keyboard, get_request_keyboard
+)
+from handlers.reminders import set_reminder, remove_reminder, show_reminders_menu
+from handlers.requests import save_contact, request_location, save_location, request_contact
+from handlers.sleep_character.sleep_character import show_sleep_characteristics_menu
+from handlers.sleep_character.sleep_mood import log_mood
+from handlers.sleep_character.sleep_quality import rate_sleep
+from handlers.sleep_character.user_sleep_goal import set_sleep_goal
+from handlers.sleep_character.user_wake_time import set_wake_time
+from handlers.states import UserStates, user_states
+from handlers.user_valid import add_new_user, get_user_stats, is_valid_user, user_state_navigate, user_valid, \
+    get_local_time, get_user_time_zone, process_user
+from handlers.weather_advice import get_weather_advice
 
 logger = logging.getLogger(__name__)
 
@@ -473,15 +468,11 @@ def setup_handlers(app: Client):
 
 
 async def sleep_time(client: Client, message: Message, user: User = None):
-    is_user, valid_id = await user_valid(message, user)
-    if is_user == 'False':
+    valid_id, user_timezone, sleep_time_dt = await process_user(message, user)
+    if user_timezone is None:
         return valid_id
 
     user_id = valid_id
-    user_timezone = get_user_time_zone_db(user_id)['time_zone']
-    if user_timezone is None:
-        user_timezone = 'UTC'
-    sleep_time_dt = datetime.now(timezone(user_timezone))
 
     try:
 
@@ -512,15 +503,11 @@ async def sleep_time(client: Client, message: Message, user: User = None):
 
 
 async def wake_time(client: Client, message: Message, user: User = None):
-    is_user, valid_id = await user_valid(message, user)
-    if is_user == 'False':
+    valid_id, user_timezone, wake_time_dt = await process_user(message, user)
+    if user_timezone is None:
         return valid_id
 
     user_id = valid_id
-    user_timezone = get_user_time_zone_db(user_id)['time_zone']
-    if user_timezone is None:
-        user_timezone = 'UTC'
-    wake_time_dt = datetime.now(timezone(user_timezone))
 
     try:
         if save_wake_time_records_db(user_id, wake_time_dt).rowcount == 0:
