@@ -46,10 +46,12 @@ async def save_location(client: Client, message: Message):
         return msg.id
 
     user_id = message.from_user.id
-    user_timezone = get_user_time_zone(user_id, latitude, longitude)
+    user_timezone = get_user_time_zone(user_id, lat=latitude, lng=longitude)
+    response = ''
     if user_timezone:
         # Отправляем текущее время
         user_time = datetime.now(timezone(user_timezone))
+        response += f'Ваш часовой пояс: {user_timezone}\nЛокальное время: {user_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n'
         logger.info(f"Часовой пояс {user_id}: {user_timezone}\nТекущее время: "
                     f"{user_time.strftime('%Y-%m-%d %H:%M:%S')}")
     else:
@@ -61,17 +63,17 @@ async def save_location(client: Client, message: Message):
         if city_name_new:
 
             if city_name_old is not None and city_name_old == city_name_new:
-                await message.reply_text(f"Ваш город по прежнему: {city_name_old}. Спасибо!",
-                                         reply_markup=get_request_keyboard('get_weather'))
+                response += f"Ваш город по прежнему: {city_name_old}. Спасибо!"
+                await message.reply_text(response, reply_markup=get_request_keyboard('get_weather'))
             else:
                 save_user_city(user_id, city_name_new)
-                await message.reply_text(f"Ваш город: {city_name_new}. Спасибо!",
-                                         reply_markup=get_request_keyboard('get_weather'))
+                response += f"Ваш город: {city_name_new}. Спасибо!"
+                await message.reply_text(response, reply_markup=get_request_keyboard('get_weather'))
 
         else:
             if city_name_old is not None:
-                await message.reply_text(f"Ваш город по прежнему: {city_name_old}. Спасибо!",
-                                         reply_markup=get_request_keyboard('get_weather'))
+                response += f"Ваш город по прежнему: {city_name_old}. Спасибо!"
+                await message.reply_text(response, reply_markup=get_request_keyboard('get_weather'))
             else:
                 msg = await message.reply_text("Извините, не удалось определить ваш город. Попробуйте еще раз.",
                                                reply_markup=get_request_keyboard('location'))
