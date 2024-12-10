@@ -7,6 +7,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from matplotlib import pyplot as plt
+from matplotlib.backend_bases import button_press_handler
 from pyrogram import Client, filters
 from pyrogram.types import Message, User, CallbackQuery, \
     InputTextMessageContent, InlineQueryResultArticle, \
@@ -47,285 +48,33 @@ def setup_handlers(app: Client):
 
     @app.on_message(filters.command("start"))
     async def start(client: Client, message: Message):
-        user = message.from_user
-        user_id = user.id
-        result = None
-        user_timezone = None
-        user_time = None
-        try:
-            add_new_user(user)
-            # Отправка приветственного сообщения с пользовательской клавиатурой
-            result = get_has_provided_location(user_id)
-            user_timezone_str = get_user_time_zone_db(user_id)['time_zone']
-            if user_timezone_str is None:
-                logger.debug(f"Пользователь {user_id} не предоставил локальное время.")
-                user_timezone_str = get_user_time_zone(user_id)
-                if user_timezone_str is not None:
-                    user_timezone = timezone(user_timezone_str)
-                    user_time = get_local_time(datetime.now(), user_id)
-
-            else:
-                user_timezone = timezone(user_timezone_str)
-                user_time = get_local_time(datetime.now(), user_id)
-
-        except Exception as e:
-            logger.error(f"Ошибка при инициализации пользователя {user.id}: {e}")
-        finally:
-            if result is None or not result['has_provided_location'] or user_timezone is None:
-                msg = await message.reply_text(
-                    "Пожалуйста, отправьте ваше местоположение, чтобы начать пользоваться ботом.",
-                    reply_markup=get_request_keyboard('location_only'))
-            else:
-                await message.reply_text(
-                    f"Привет, {user.first_name}!\nВы находитесь в "
-                    f"{user_timezone} локальное время "
-                    f"{user_time.strftime('%Y-%m-%d %H:%M:%S')}."
-                )
-                msg = await message.reply_text(
-                    "Вы уже предоставили свою локацию.\n\n👋 Привет! Я бот для отслеживания сна.\n\n"
-                    "Выберите действие из меню ниже:",
-                    reply_markup=get_initial_keyboard()
-                )
-                user_states[user_id] = UserStates.STATE_NONE
-            message_ids.append(msg.id)
+        message_id = await start_handler(client, message)
+        if message_id:
+            message_ids.append(message_id)
 
     # Обработка нажатий кнопок
     @app.on_message(filters.text & ~filters.regex(r'^/'))
     async def handle_button_presses(client: Client, message: Message):
-        user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
-
-        user_id = user.id
-        text = message.text.strip()
-        if text == "⚙️ Меню":
-            await send_main_menu(client, message.chat.id)
-        # elif text == "😴 Сон":
-        #     sleep_time(client, message, user)
-        # elif text == "🌅 Пробуждение":
-        #     wake_time(client, message, user)
-        # elif text == "📊 Статистика":
-        #     sleep_stats(client, message, user)
-        # elif text == "⏰ Установить напоминание":
-        #     set_reminder(client, message)
-        # elif text == "🔕 Удалить напоминание":
-        #     remove_reminder(client, message, user)
-        # elif text == "📞 Отправить номер телефона":
-        #     request_contact(client, message)
-        # elif text == "📈 График сна":
-        #     sleep_chart(client, message, user)
-        # elif text == "💡 Совет по сну":
-        #     sleep_tips(client, message, user)
-        # elif text == "⭐️ Оценка сна":
-        #     rate_sleep(client, message)
-        # elif text == "🎯 Установка цели сна":
-        #     set_sleep_goal(client, message)
-        # elif text == "🥳 Ваше настроение":
-        #     log_mood(client, message)
-        # elif text == "🗃 Сохранить данные":
-        #     export_data(client, message, user)
-        elif text == "ℹ️ Информация":
-            await message.reply_text("Это информация о боте.")
-        elif text in {"← Вернуться", "🔙 Назад", "← Назад"}:
-            await remove_main_menu(client, message.chat.id)
-            if message_ids:
-                await client.delete_messages(message.chat.id, message_ids)
-                message_ids.clear()
-            msg = await message.reply_text(
-                "Вы вернулись назад. Выберите действие:",
-                reply_markup=main_menu_keyboard()
-            )
-            message_ids.append(msg.id)
-        else:
-            # Если сообщение является ответом на ForceReply, обрабатываем его соответствующим образом
-            if message.reply_to_message:
-
-                logger.debug("ForceReply on button presses")
-
-                if user_id not in user_states or user_states[user.id] == UserStates.STATE_NONE:
-
-                    await send_main_menu(client, user_id)
-                    # await message.reply_text("Пожалуйста, используйте соответствующую команду для начала.",
-                    #                          reply_markup=main_menu_keyboard())
-                    await message.delete()
-
-                # Обработка ответов на запросы, например, set_reminder, save_reminder_time и т.д.
-                elif user_id in user_states and user_states[user.id] != UserStates.STATE_NONE:
-                    state = user_states[user_id]
-
-                    message_id = await user_state_navigate(state, client, message, user)
-                    if message_id:
-                        message_ids.append(message_id)
-            else:
-                if user.id in user_states and user_states[user.id] != UserStates.STATE_NONE:
-
-                    state = user_states[user_id]
-
-                    message_id = await user_state_navigate(state, client, message, user)
-                    if message_id:
-                        message_ids.append(message_id)
-
-                # Неизвестная команда
-                else:
-                    await message.reply_text(
-                        "Пожалуйста, выберите действие из меню.",
-                        reply_markup=get_initial_keyboard()
-                    )
-        if text in {"😴 Сон", "🌅 Пробуждение", "📊 Статистика",
-                    "⏰ Установить напоминание", "🔕 Удалить напоминание",
-                    "📞 Отправить номер телефона", "📈 График сна", "💡 Совет по сну",
-                    "⭐️ Оценка сна", "🎯 Установка цели сна", "🥳 Ваше настроение",
-                    "🗃 Сохранить данные", "❌ Удалить мои данные", "⚙️ Меню", "← Вернуться", "🔙 Назад"}:
-            await message.delete()
+        message_id = await button_process_handler(client, message, message_ids)
+        if message_id:
+            message_ids.append(message_id)
 
     # Обработка нажатий кнопок
     @app.on_callback_query()
     async def handle_callback_query(client: Client, callback_query: CallbackQuery):
-        user = callback_query.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
-
-        message = callback_query.message
-        data = callback_query.data
-
-        if data == "sleep":
-            message_id = await sleep_time(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "wake":
-            message_id = await wake_time(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "stats":
-            message_id = await sleep_stats(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "sleep_chart":
-            message_id = await sleep_chart(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "reminders":
-            message_id = await show_reminders_menu(client, message, user)
-            if message_id:
-                [message_ids.append(msg_id) for msg_id in message_id] if isinstance(message_id, tuple) \
-                    else message_ids.append(message_id)
-        elif data == "set_reminder":
-            message_id = await set_reminder(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "reset_reminder":
-            message_id = await remove_reminder(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "request_contact":
-            message_ids.append(await request_contact(client, message))
-        elif data == "sleep_goals":
-            message_id = await set_sleep_goal(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "sleep_characteristics":
-            message_id = await show_sleep_characteristics_menu(client, user.id)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "sleep_tips":
-            message_id = await sleep_tips(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "user_data_management":
-            message_id = await show_user_data_management_menu(client, user.id)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "rate_mood":
-            message_id = await log_mood(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "set_wake_time":
-            message_id = await set_wake_time(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "weather":
-            message_id = await get_weather_advice(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "rate_sleep":
-            message_id = await rate_sleep(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "delete_data":
-            message_id = await delete_my_data(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "save_data":
-            message_id = await export_data(client, message, user)
-            if message_id:
-                message_ids.append(message_id)
-        elif data == "back_to_menu":
-            if message_ids:
-                await client.delete_messages(message.chat.id, message_ids)
-
-            await message.reply("Вы вернулись.", reply_markup=main_menu_keyboard())
-
-            # await send_main_menu(client, message.chat.id)
-        # Уведомляем Telegram, что колбэк обработан
-        await message.edit_reply_markup(reply_markup=None)
-        await message.delete()
-        await callback_query.answer()
+        message_id = await callback_query_handler(client, callback_query)
+        if message_id:
+            [message_ids.append(msg_id) for msg_id in message_id] if isinstance(message_id, tuple) \
+                else message_ids.append(message_id)
 
     @app.on_inline_query()
     async def answer_inline_query(client: Client, inline_query: InlineQuery):
-        is_user, valid_id = await user_valid(None, inline_query.from_user)
-        if is_user == 'False':
-            return valid_id
-
-        user_id = valid_id
-        query = inline_query.query.strip()
-        if query == "stats":
-            # Получение статистики пользователя из базы данных
-            stats = get_user_stats(user_id)
-            if stats:
-                result = [
-                    InlineQueryResultArticle(
-                        id=str(uuid4()),
-                        title="Моя статистика сна",
-                        input_message_content=InputTextMessageContent(stats),
-                        description="Моя статистика сна за последний сон"
-                    )
-                ]
-                await inline_query.answer(result)
-            else:
-                await inline_query.answer([])
-        else:
-            await inline_query.answer([])
-
-        logger.info(f"Пользователь {user_id} отправил Inline-query запрос: {query}")
+        await answer_inline_query_handler(client, inline_query)
 
     # Общий обработчик ответов на ForceReply
     @app.on_message(filters.reply & filters.text)
     async def handle_force_reply(client, message: Message):
-        user = message.from_user
-        try:
-            is_valid_user(user)
-        except Exception as e:
-            logger.error(f"Пользователь {user} не является валидным: {e}")
-            return
-
-        user_id = user.id
-        if user_id not in user_states:
-            await message.reply_text("Пожалуйста, используйте соответствующую команду для начала.",
-                                     reply_markup=get_back_keyboard())
-            await send_main_menu(client, user_id)
-            return
-
-        logger.debug("user_id in user_states")
-        state = user_states[user_id]
-
-        message_id = await user_state_navigate(state, client, message, user)
+        message_id = await force_reply_handler(client, message)
         if message_id:
             message_ids.append(message_id)
 
@@ -465,6 +214,266 @@ def setup_handlers(app: Client):
     @app.on_message()
     def handle_messages(client, message: Message):
         logger.info(f"Получено сообщение от пользователя {message.from_user.id}: {message.text}")
+
+
+async def start_handler(client: Client, message: Message):
+    user = message.from_user
+    user_id = user.id
+    result = None
+    user_timezone = None
+    user_time = None
+    try:
+        add_new_user(user)
+        # Отправка приветственного сообщения с пользовательской клавиатурой
+        result = get_has_provided_location(user_id)
+        user_timezone_str = get_user_time_zone_db(user_id)['time_zone']
+        if user_timezone_str is None:
+            logger.debug(f"Пользователь {user_id} не предоставил локальное время.")
+            user_timezone_str = get_user_time_zone(user_id)
+            if user_timezone_str is not None:
+                user_timezone = timezone(user_timezone_str)
+                user_time = get_local_time(datetime.now(), user_id)
+
+        else:
+            user_timezone = timezone(user_timezone_str)
+            user_time = get_local_time(datetime.now(), user_id)
+
+    except Exception as e:
+        logger.error(f"Ошибка при инициализации пользователя {user.id}: {e}")
+    finally:
+        if result is None or not result['has_provided_location'] or user_timezone is None:
+            msg = await message.reply_text(
+                "Пожалуйста, отправьте ваше местоположение, чтобы начать пользоваться ботом.",
+                reply_markup=get_request_keyboard('location_only'))
+        else:
+            await message.reply_text(
+                f"Привет, {user.first_name}!\nВы находитесь в "
+                f"{user_timezone} локальное время "
+                f"{user_time.strftime('%Y-%m-%d %H:%M:%S')}."
+            )
+            msg = await message.reply_text(
+                "Вы уже предоставили свою локацию.\n\n👋 Привет! Я бот для отслеживания сна.\n\n"
+                "Выберите действие из меню ниже:",
+                reply_markup=get_initial_keyboard()
+            )
+            user_states[user_id] = UserStates.STATE_NONE
+        return msg.id
+
+
+async def button_process_handler(client: Client, message: Message, message_ids: list[int]):
+    user = message.from_user
+    try:
+        is_valid_user(user)
+    except Exception as e:
+        logger.error(f"Пользователь {user} не является валидным: {e}")
+        return
+
+    user_id = user.id
+    text = message.text.strip()
+    if text == "⚙️ Меню":
+        await send_main_menu(client, message.chat.id)
+    # elif text == "😴 Сон":
+    #     sleep_time(client, message, user)
+    # elif text == "🌅 Пробуждение":
+    #     wake_time(client, message, user)
+    # elif text == "📊 Статистика":
+    #     sleep_stats(client, message, user)
+    # elif text == "⏰ Установить напоминание":
+    #     set_reminder(client, message)
+    # elif text == "🔕 Удалить напоминание":
+    #     remove_reminder(client, message, user)
+    # elif text == "📞 Отправить номер телефона":
+    #     request_contact(client, message)
+    # elif text == "📈 График сна":
+    #     sleep_chart(client, message, user)
+    # elif text == "💡 Совет по сну":
+    #     sleep_tips(client, message, user)
+    # elif text == "⭐️ Оценка сна":
+    #     rate_sleep(client, message)
+    # elif text == "🎯 Установка цели сна":
+    #     set_sleep_goal(client, message)
+    # elif text == "🥳 Ваше настроение":
+    #     log_mood(client, message)
+    # elif text == "🗃 Сохранить данные":
+    #     export_data(client, message, user)
+    elif text == "ℹ️ Информация":
+        await message.reply_text("Это информация о боте.")
+    elif text in {"← Вернуться", "🔙 Назад", "← Назад"}:
+        await remove_main_menu(client, message.chat.id)
+        if message_ids:
+            await client.delete_messages(message.chat.id, message_ids)
+            message_ids.clear()
+        msg = await message.reply_text(
+            "Вы вернулись назад. Выберите действие:",
+            reply_markup=main_menu_keyboard()
+        )
+        return msg.id
+    else:
+        # Если сообщение является ответом на ForceReply, обрабатываем его соответствующим образом
+        if message.reply_to_message:
+
+            logger.debug("ForceReply on button presses")
+
+            if user_id not in user_states or user_states[user.id] == UserStates.STATE_NONE:
+
+                await send_main_menu(client, user_id)
+                # await message.reply_text("Пожалуйста, используйте соответствующую команду для начала.",
+                #                          reply_markup=main_menu_keyboard())
+                await message.delete()
+
+            # Обработка ответов на запросы, например, set_reminder, save_reminder_time и т.д.
+            elif user_id in user_states and user_states[user.id] != UserStates.STATE_NONE:
+                state = user_states[user_id]
+
+                message_id = await user_state_navigate(state, client, message, user)
+                return message_id
+        else:
+            if user.id in user_states and user_states[user.id] != UserStates.STATE_NONE:
+
+                state = user_states[user_id]
+
+                message_id = await user_state_navigate(state, client, message, user)
+                return message_ids.append(message_id)
+
+            # Неизвестная команда
+            else:
+                await message.reply_text(
+                    "Пожалуйста, выберите действие из меню.",
+                    reply_markup=get_initial_keyboard()
+                )
+    if text in {"😴 Сон", "🌅 Пробуждение", "📊 Статистика",
+                "⏰ Установить напоминание", "🔕 Удалить напоминание",
+                "📞 Отправить номер телефона", "📈 График сна", "💡 Совет по сну",
+                "⭐️ Оценка сна", "🎯 Установка цели сна", "🥳 Ваше настроение",
+                "🗃 Сохранить данные", "❌ Удалить мои данные", "⚙️ Меню", "← Вернуться", "🔙 Назад"}:
+        await message.delete()
+
+
+async def callback_query_handler(client: Client, callback_query: CallbackQuery, message_ids: list[int]):
+    user = callback_query.from_user
+    try:
+        is_valid_user(user)
+    except Exception as e:
+        logger.error(f"Пользователь {user} не является валидным: {e}")
+        return
+
+    message = callback_query.message
+    data = callback_query.data
+
+    if data == "sleep":
+        message_id = await sleep_time(client, message, user)
+        return message_id
+    elif data == "wake":
+        message_id = await wake_time(client, message, user)
+        return message_id
+    elif data == "stats":
+        message_id = await sleep_stats(client, message, user)
+        return message_id
+    elif data == "sleep_chart":
+        message_id = await sleep_chart(client, message, user)
+        return message_id
+    elif data == "reminders":
+        message_id = await show_reminders_menu(client, message, user)
+        return message_id
+    elif data == "set_reminder":
+        message_id = await set_reminder(client, message, user)
+        return message_id
+    elif data == "reset_reminder":
+        message_id = await remove_reminder(client, message, user)
+        return message_id
+    elif data == "request_contact":
+        return await request_contact(client, message)
+    elif data == "sleep_goals":
+        message_id = await set_sleep_goal(client, message, user)
+        return message_id
+    elif data == "sleep_characteristics":
+        message_id = await show_sleep_characteristics_menu(client, user.id)
+        return message_id
+    elif data == "sleep_tips":
+        message_id = await sleep_tips(client, message, user)
+        return message_id
+    elif data == "user_data_management":
+        message_id = await show_user_data_management_menu(client, user.id)
+        return message_id
+    elif data == "rate_mood":
+        message_id = await log_mood(client, message, user)
+        return message_id
+    elif data == "set_wake_time":
+        message_id = await set_wake_time(client, message, user)
+        return message_id
+    elif data == "weather":
+        message_id = await get_weather_advice(client, message, user)
+        return message_id
+    elif data == "rate_sleep":
+        message_id = await rate_sleep(client, message, user)
+        return message_id
+    elif data == "delete_data":
+        message_id = await delete_my_data(client, message, user)
+        return message_id
+    elif data == "save_data":
+        message_id = await export_data(client, message, user)
+        return message_id
+    elif data == "back_to_menu":
+        if message_ids:
+            await client.delete_messages(message.chat.id, message_ids)
+
+        await message.reply("Вы вернулись.", reply_markup=main_menu_keyboard())
+
+        # await send_main_menu(client, message.chat.id)
+    # Уведомляем Telegram, что колбэк обработан
+    await message.edit_reply_markup(reply_markup=None)
+    await message.delete()
+    await callback_query.answer()
+
+
+async def answer_inline_query_handler(client: Client, inline_query: InlineQuery):
+    is_user, valid_id = await user_valid(None, inline_query.from_user)
+    if is_user == 'False':
+        return valid_id
+
+    user_id = valid_id
+    query = inline_query.query.strip()
+    if query == "stats":
+        # Получение статистики пользователя из базы данных
+        stats = get_user_stats(user_id)
+        if stats:
+            result = [
+                InlineQueryResultArticle(
+                    id=str(uuid4()),
+                    title="Моя статистика сна",
+                    input_message_content=InputTextMessageContent(stats),
+                    description="Моя статистика сна за последний сон"
+                )
+            ]
+            await inline_query.answer(result)
+        else:
+            await inline_query.answer([])
+    else:
+        await inline_query.answer([])
+
+    logger.info(f"Пользователь {user_id} отправил Inline-query запрос: {query}")
+
+
+async def force_reply_handler(client: Client, message: Message):
+    user = message.from_user
+    try:
+        is_valid_user(user)
+    except Exception as e:
+        logger.error(f"Пользователь {user} не является валидным: {e}")
+        return
+
+    user_id = user.id
+    if user_id not in user_states:
+        await message.reply_text("Пожалуйста, используйте соответствующую команду для начала.",
+                                 reply_markup=get_back_keyboard())
+        await send_main_menu(client, user_id)
+        return
+
+    logger.debug("user_id in user_states")
+    state = user_states[user_id]
+
+    message_id = await user_state_navigate(state, client, message, user)
+    return message_id
 
 
 async def sleep_time(client: Client, message: Message, user: User = None):
