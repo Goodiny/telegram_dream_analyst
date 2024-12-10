@@ -3,11 +3,10 @@ from __future__ import annotations
 import logging.config
 
 from pyrogram import Client
-import sqlite3
-from configs import TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_BOT_TOKEN
-from handlers import setup_handlers, setup_scheduler
 
+from configs import TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_BOT_TOKEN
 from db import database_initialize
+from handlers import setup_handlers, setup_scheduler
 
 # Настройка логирования
 logger = logging.getLogger(__name__)

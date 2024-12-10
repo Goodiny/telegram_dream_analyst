@@ -1,7 +1,9 @@
-import psycopg2
 import logging.config
-from db.execute_query import execute_query_sl, execute_query_pg
+
+import psycopg2
+
 from configs.config import logger
+from db.execute_query import execute_query_sl, execute_query_pg
 
 logger = logging.getLogger(__name__)
 

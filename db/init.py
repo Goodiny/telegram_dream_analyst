@@ -1,5 +1,7 @@
 import logging.config
+
 import psycopg2
+
 from db.execute_query import execute_query_pg
 
 logger = logging.getLogger(__name__)
