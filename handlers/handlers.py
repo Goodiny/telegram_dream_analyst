@@ -7,7 +7,6 @@ from datetime import datetime
 from uuid import uuid4
 
 from matplotlib import pyplot as plt
-from matplotlib.backend_bases import button_press_handler
 from pyrogram import Client, filters
 from pyrogram.types import Message, User, CallbackQuery, \
     InputTextMessageContent, InlineQueryResultArticle, \
@@ -62,7 +61,7 @@ def setup_handlers(app: Client):
     # Обработка нажатий кнопок
     @app.on_callback_query()
     async def handle_callback_query(client: Client, callback_query: CallbackQuery):
-        message_id = await callback_query_handler(client, callback_query)
+        message_id = await callback_query_handler(client, callback_query, message_ids)
         if message_id:
             [message_ids.append(msg_id) for msg_id in message_id] if isinstance(message_id, tuple) \
                 else message_ids.append(message_id)
