@@ -37,7 +37,9 @@ def get_all_reminders():
     """
     Возвращает список всех напоминаний
     """
-    return execute_query_pg('SELECT user_id FROM public.reminders').fetchall()
+    cursor = execute_query_pg('SELECT user_id FROM public.reminders')
+
+    return cursor.fetchall() if cursor else None
 
 
 @exception_handler
@@ -45,8 +47,12 @@ def get_reminder_db(user_id: int):
     """
     Возвращает reminder_time для пользователя с id user_id
     """
-    return execute_query_pg('SELECT * FROM public.reminders WHERE user_id = %(user_id)s', 
-                             {'user_id': user_id}).fetchone()
+    cursor = execute_query_pg(
+        'SELECT * FROM public.reminders WHERE user_id = %(user_id)s',
+        {'user_id': user_id}
+    )
+
+    return cursor.fetchone() if cursor else None
 
 
 @exception_handler
@@ -54,9 +60,12 @@ def get_reminder_time_db(user_id: int):
     """
     Возвращает reminder_time для пользователя с id user_id
     """
-    return execute_query_pg(
-        'SELECT reminder_time FROM public.reminders WHERE user_id = %(user_id)s', 
-        {'user_id': user_id}).fetchone()
+    cursor = execute_query_pg(
+        'SELECT reminder_time FROM public.reminders WHERE user_id = %(user_id)s',
+        {'user_id': user_id}
+    )
+
+    return cursor.fetchone() if cursor else None
 
 
 # SLEEP_RECORDS
@@ -66,8 +75,10 @@ def get_all_sleep_records(user_id: int):
     """
     Возвращает список всех записей о снах пользователя с id user_id
     """
-    return execute_query_pg('SELECT * FROM public.sleep_records WHERE user_id = %(user_id)s', 
-                             {'user_id': user_id}).fetchall()
+    cursor = execute_query_pg('SELECT * FROM public.sleep_records WHERE user_id = %(user_id)s',
+                      {'user_id': user_id})
+
+    return cursor.fetchall() if cursor else None
 
 
 @exception_handler
@@ -75,11 +86,13 @@ def get_sleep_records_per_week(user_id: int):
     """
     Возвращает sleep_time и wake_time для пользователя с id user_id, если wake_time == NULL
     """
-    return execute_query_pg('''
+    cursor = execute_query_pg('''
         SELECT sleep_time, wake_time FROM public.sleep_records
         WHERE user_id = %(user_id)s AND wake_time IS NOT NULL
         ORDER BY sleep_time DESC LIMIT 7
-    ''', {'user_id': user_id}).fetchall()
+    ''', {'user_id': user_id})
+
+    return cursor.fetchall() if cursor else None
 
 
 @exception_handler
@@ -87,11 +100,13 @@ def get_sleep_record_last_db(user_id: int):
     """
     Возвращает sleep_time и wake_time для пользователя с id user_id
     """
-    return execute_query_pg('''
+    cursor = execute_query_pg('''
         SELECT sleep_time, wake_time FROM public.sleep_records
         WHERE user_id = %(user_id)s
         ORDER BY sleep_time DESC
-    ''', {'user_id': user_id}).fetchone()
+    ''', {'user_id': user_id})
+
+    return cursor.fetchone() if cursor else None
 
 
 @exception_handler
@@ -99,10 +114,12 @@ def get_sleep_time_without_wake_db(user_id: int):
     """
     Возвращает sleep_time для пользователя с id = user_id, если wake_time == NULL
     """
-    return execute_query_pg('''
+    cursor = execute_query_pg('''
         SELECT sleep_time FROM public.sleep_records 
         WHERE user_id = %(user_id)s AND wake_time IS NULL
-    ''', {'user_id': user_id}).fetchone()
+    ''', {'user_id': user_id})
+
+    return cursor.fetchone() if cursor else None
 
 
 @exception_handler
@@ -110,11 +127,13 @@ def get_wake_time_null(user_id: int):
     """
     Возвращает wake_time для пользователя с id = user_id, если wake_time == NULL
     """
-    return execute_query_pg('''
+    cursor = execute_query_pg('''
         SELECT wake_time FROM public.sleep_records
         WHERE user_id = %(user_id)s
         AND wake_time IS NULL
-    ''', {'user_id': user_id}).fetchall()
+    ''', {'user_id': user_id})
+
+    return cursor.fetchall() if cursor else None
 
 # USERS
 
@@ -123,7 +142,9 @@ def get_all_users():
     """
     Возвращает список всех пользователей
     """
-    return execute_query_pg('SELECT * FROM public.users').fetchall()
+    cursor = execute_query_pg('SELECT * FROM public.users')
+
+    return cursor.fetchall() if cursor else None
 
 
 @exception_handler
@@ -131,7 +152,9 @@ def get_all_users_city_name():
     """
     Возвращает список всех пользователей с их городом
     """
-    return execute_query_pg('SELECT id, city_name, time_zone FROM public.users').fetchall()
+    cursor = execute_query_pg('SELECT id, city_name, time_zone FROM public.users')
+
+    return cursor.fetchall() if cursor else None
 
 
 @exception_handler
@@ -139,8 +162,10 @@ def get_user_time_zone_db(user_id: int):
     """
     Возвращает time_zone для пользователя с id user_id
     """
-    return execute_query_pg('SELECT time_zone FROM public.users WHERE id = %(user_id)s',
-                             {'user_id': user_id}).fetchone()
+    cursor = execute_query_pg('SELECT time_zone FROM public.users WHERE id = %(user_id)s',
+                             {'user_id': user_id})
+
+    return cursor.fetchone() if cursor else None
 
 
 @exception_handler
@@ -148,8 +173,10 @@ def get_user_db(user_id: int):
     """
     Возвращает пользователя с id user_id
     """
-    return execute_query_pg('SELECT * FROM public.users WHERE id = %(user_id)s', 
-                             {'user_id': user_id}).fetchone()
+    cursor = execute_query_pg('SELECT * FROM public.users WHERE id = %(user_id)s',
+                             {'user_id': user_id})
+
+    return cursor.fetchone() if cursor else None
 
 
 @exception_handler
@@ -157,8 +184,10 @@ def get_city_name(user_id: int):
     """
     Возвращает city_name для пользователя с id user_id
     """
-    return execute_query_pg('SELECT city_name FROM public.users WHERE id = %(user_id)s', 
-                             {'user_id': user_id}).fetchone()
+    cursor = execute_query_pg('SELECT city_name FROM public.users WHERE id = %(user_id)s',
+                             {'user_id': user_id})
+
+    return cursor.fetchone() if cursor else None
 
 
 @exception_handler
@@ -166,8 +195,10 @@ def get_sleep_goal_user(user_id: int):
     """
     Возвращает sleep_goal для пользователя с id user_id
     """
-    return execute_query_pg('SELECT sleep_goal FROM public.users WHERE id = %(user_id)s',
-                             {'user_id': user_id}).fetchone()
+    cursor = execute_query_pg('SELECT sleep_goal FROM public.users WHERE id = %(user_id)s',
+                             {'user_id': user_id})
+
+    return cursor.fetchone() if cursor else None
 
 
 @exception_handler
@@ -175,8 +206,10 @@ def get_user_wake_time(user_id: int):
     """
     Возвращает id и wake_time для пользователя с id user_id
     """
-    return execute_query_pg('SELECT id, wake_time FROM public.users WHERE id = %(user_id)s', 
-                            {'user_id': user_id}).fetchone()
+    cursor = execute_query_pg('SELECT id, wake_time FROM public.users WHERE id = %(user_id)s',
+                            {'user_id': user_id})
+
+    return cursor.fetchone() if cursor else None
 
 
 @exception_handler
@@ -184,8 +217,10 @@ def get_has_provided_location(user_id: int):
     """
     Возвращает has_provided_location для пользователя с id user_id
     """
-    return execute_query_pg('SELECT id, has_provided_location FROM public.users WHERE id = %(user_id)s', 
-                             {'user_id': user_id}).fetchone()
+    cursor = execute_query_pg('SELECT id, has_provided_location FROM public.users WHERE id = %(user_id)s',
+                             {'user_id': user_id})
+
+    return cursor.fetchone() if cursor else None
 
 
 # SAVE
