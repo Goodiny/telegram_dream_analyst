@@ -28,18 +28,24 @@ def execute_query_pg(query, params=None, row_factory=True):
     :param row_factory: If True, the query will return a list of dictionaries.
     :return: A list of dictionaries if row_factory is True, or None if row_factory is False.
     """
-    with psycopg2.connect(database=DATABASE,
-                          user=USERNAME,
-                          password=PASSWORD,
-                          host=HOST, port=PORT, 
-                          cursor_factory=RealDictCursor) as conn:
-        cursor = conn.cursor()
-        try:
+
+    try:
+        with psycopg2.connect(database=DATABASE,
+                              user=USERNAME,
+                              password=PASSWORD,
+                              host=HOST, port=PORT,
+                              cursor_factory=RealDictCursor) as conn:
+            cursor = conn.cursor()
+
             if params:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
             conn.commit()
             return cursor
-        except psycopg2.OperationalError:
-            return None
+    except psycopg2.OperationalError as e:
+        logger.error(f"OperationalError: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"General exception: {e}")
+        return None
