@@ -184,3 +184,4 @@ docker-compose.yml
 
 /postgresql-driver-license.txt
 /docker-compose.yml
+!/requirements.txt
