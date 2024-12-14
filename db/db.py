@@ -250,13 +250,13 @@ def save_user_to_db(user_id: int,
         if arg not in {'user_id', 'username', 'first_name', 
                     'last_name', 'phone_number', 
                     'city_name','sleep_goal', 
-                    'wake_time', 'has_provided_location'}:
+                    'wake_time', 'has_provided_location', 'time_zone'}:
             raise ValueError('Неизвестные параметры при сохранении пользователя')
-        if arg == 'sleep_goal' and not (isinstance(values[arg], float) or values[arg] is None):
+        if arg == 'sleep_goal' and values[arg] is not None and not isinstance(values[arg], float):
             raise ValueError('Неверный тип параметра sleep_goal')
-        if arg == 'has_provided_location' and not (isinstance(values[arg], int) or values[arg] is None):
+        if arg == 'has_provided_location' and values[arg] is not None and not isinstance(values[arg], int):
             raise ValueError('Неверный тип параметра has_provided_location')
-        if arg != 'user_id' and not (isinstance(values[arg], str) or values[arg] is None):
+        if arg != 'user_id' and values[arg] is not None and not isinstance(values[arg], str):
             raise ValueError('Неверный тип параметра ' + arg)
         if arg != 'user_id' and values[arg] is not None:
             params[arg] = values[arg]
@@ -279,6 +279,8 @@ def save_user_to_db(user_id: int,
     '''
     params['user_id'] = user_id
 
+    logger.debug(f'Параметры: {params}')
+
     execute_query_pg(query_str, params)
     logger.info(f'Пользователь  с id {user_id} сохранен в базе данных')
     
@@ -291,9 +293,9 @@ def save_user_city(user_id, city_name):
     # Здесь реализуется логика сохранения данных в базе данных
     execute_query_pg('''
         UPDATE public.users SET 
-            city_name = %(city_name)s, 
-            has_provided_location = 1 
-            WHERE id = %(user_id)s
+        city_name = %(city_name)s, 
+        has_provided_location = 1 
+        WHERE id = %(user_id)s
     ''', {'city_name': city_name, 'user_id': user_id})
     logger.info(f'Город {city_name} для пользователя с id {user_id} сохранены в базе данных')
 
@@ -329,10 +331,10 @@ def save_sleep_goal_db(user_id: int, goal: float):
     Сохраняет sleep_goal для пользователя с id = user_id
     """
     execute_query_pg('''
-            UPDATE public.users
-            SET sleep_goal = %(goal)s
-            WHERE id = %(user_id)s
-        ''', {'user_id': user_id, 'goal': goal})
+        UPDATE public.users
+        SET sleep_goal = %(goal)s
+        WHERE id = %(user_id)s
+    ''', {'user_id': user_id, 'goal': goal})
 
 
 @exception_handler
@@ -341,10 +343,10 @@ def save_wake_time_user_db(user_id: int, wake_time: str):
     Сохраняет wake_time для пользователя с id = user_id
     """
     execute_query_pg('''
-           UPDATE public.users 
-           SET wake_time = %(wake_time)s
-           WHERE id = %(user_id)s
-       ''', {'user_id': user_id, 'wake_time': wake_time})
+       UPDATE public.users 
+       SET wake_time = %(wake_time)s
+       WHERE id = %(user_id)s
+   ''', {'user_id': user_id, 'wake_time': wake_time})
 
 
 @exception_handler
@@ -410,11 +412,11 @@ def save_reminder_time_db(user_id: int, reminder_time: str):
     Сохраняет reminder_time для пользователя с id = user_id
     """
     execute_query_pg('''
-                INSERT INTO public.reminders (user_id, reminder_time)
-                VALUES (%(user_id)s, %(reminder_time)s)
-                ON CONFLICT(user_id) DO UPDATE SET
-                  reminder_time = %(reminder_time)s
-            ''', {'user_id': user_id, 'reminder_time': reminder_time})
+        INSERT INTO public.reminders (user_id, reminder_time)
+        VALUES (%(user_id)s, %(reminder_time)s)
+        ON CONFLICT(user_id) DO UPDATE SET
+            reminder_time = %(reminder_time)s
+    ''', {'user_id': user_id, 'reminder_time': reminder_time})
 
 
 # DELETE
